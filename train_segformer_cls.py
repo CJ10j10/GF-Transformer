@@ -1,65 +1,67 @@
+"""Stage 2: Damage Classification with GFformer_two — 4-GPU DDP version."""
+
 import os
-
-os.environ["MKL_NUM_THREADS"] = "2"
-os.environ["NUMEXPR_NUM_THREADS"] = "2"
-os.environ["OMP_NUM_THREADS"] = "2"
-
-from os import path, makedirs, listdir
 import sys
-import numpy as np
-
-np.random.seed(1)
+import gc
 import random
+import timeit
 
-random.seed(1)
-
+import numpy as np
+import cv2
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.backends import cudnn
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
+import torch.distributed as dist
 import torch.optim.lr_scheduler as lr_scheduler
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from apex import amp
-
 from adamw import AdamW
 from losses import dice_round, ComboLoss
-
-import pandas as pd
-from tqdm import tqdm
-import timeit
-import cv2
-
-from model.gfmodel import GFormer_two
-
-from imgaug import augmenters as iaa
-
-from utils import *
-
-from skimage.morphology import square, dilation
-
-from sklearn.model_selection import train_test_split
-
-from sklearn.metrics import accuracy_score
-
-import gc
 from TripletLoss import TripletMarginLoss
-from torch.utils.tensorboard import SummaryWriter
+from utils import *
+from imgaug import augmenters as iaa
+from sklearn.model_selection import train_test_split
+from skimage.morphology import square, dilation
+from tqdm import tqdm
 
+# ── Paths ─────────────────────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(BASE_DIR, 'model'))
+from gfmodel import GFformer_two
+
+DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
+TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
+MODELS_FOLDER = os.path.join(BASE_DIR, 'tune_weight')
+LOC_FOLDER = os.path.join(BASE_DIR, 'loc_segformer')
+INPUT_SHAPE = (512, 512)
+os.makedirs(MODELS_FOLDER, exist_ok=True)
+os.makedirs(LOC_FOLDER, exist_ok=True)
+
+# ── DDP helpers ───────────────────────────────────────────────────────
+def is_main():
+    return not dist.is_initialized() or dist.get_rank() == 0
+
+def barrier():
+    if dist.is_initialized():
+        dist.barrier()
+
+def dprint(*args, **kwargs):
+    if is_main():
+        print(*args, **kwargs)
+
+# ── Data ──────────────────────────────────────────────────────────────
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
 
-train_dirs = ['/home/xww/train', '/home/xww/tier3']
-models_folder = 'tune_weight'
-
-loc_folder = 'loc_segformer'
-input_shape = (512, 512)
-
 all_files = []
-for d in train_dirs:
-    for f in sorted(listdir(path.join(d, 'images'))):
+for d in TRAIN_DIRS:
+    for f in sorted(os.listdir(os.path.join(d, 'images'))):
         if '_pre_disaster.png' in f:
-            all_files.append(path.join(d, 'images', f))
+            all_files.append(os.path.join(d, 'images', f))
 
 
 class TrainData(Dataset):
@@ -73,15 +75,16 @@ class TrainData(Dataset):
 
     def __getitem__(self, idx):
         _idx = self.train_idxs[idx]
-
         fn = all_files[_idx]
 
         img = cv2.imread(fn, cv2.IMREAD_COLOR)
         img2 = cv2.imread(fn.replace('_pre_disaster', '_post_disaster'), cv2.IMREAD_COLOR)
 
         msk0 = cv2.imread(fn.replace('/images/', '/masks/'), cv2.IMREAD_UNCHANGED)
-        lbl_msk1 = cv2.imread(fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster'),
-                              cv2.IMREAD_UNCHANGED)
+        lbl_msk1 = cv2.imread(
+            fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster'),
+            cv2.IMREAD_UNCHANGED)
+
         msk1 = np.zeros_like(lbl_msk1)
         msk2 = np.zeros_like(lbl_msk1)
         msk3 = np.zeros_like(lbl_msk1)
@@ -91,20 +94,15 @@ class TrainData(Dataset):
         msk4[lbl_msk1 == 4] = 255
         msk1[lbl_msk1 == 1] = 255
 
+        # ── Augmentation (applied to pre + post jointly) ──
         if random.random() > 0.5:
-            img = img[::-1, ...]
-            img2 = img2[::-1, ...]
-            msk0 = msk0[::-1, ...]
-            msk1 = msk1[::-1, ...]
-            msk2 = msk2[::-1, ...]
-            msk3 = msk3[::-1, ...]
-            msk4 = msk4[::-1, ...]
+            img, img2 = img[::-1, ...], img2[::-1, ...]
+            msk0, msk1, msk2, msk3, msk4 = [m[::-1, ...] for m in (msk0, msk1, msk2, msk3, msk4)]
 
         if random.random() > 0.05:
             rot = random.randrange(4)
             if rot > 0:
-                img = np.rot90(img, k=rot)
-                img2 = np.rot90(img2, k=rot)
+                img, img2 = np.rot90(img, k=rot), np.rot90(img2, k=rot)
                 msk0 = np.rot90(msk0, k=rot)
                 msk1 = np.rot90(msk1, k=rot)
                 msk2 = np.rot90(msk2, k=rot)
@@ -115,6 +113,8 @@ class TrainData(Dataset):
             shift_pnt = (random.randint(-320, 320), random.randint(-320, 320))
             img = shift_image(img, shift_pnt)
             img2 = shift_image(img2, shift_pnt)
+            for m in (msk0, msk1, msk2, msk3, msk4):
+                _ = shift_image(m, shift_pnt)  # applied in-place via return
             msk0 = shift_image(msk0, shift_pnt)
             msk1 = shift_image(msk1, shift_pnt)
             msk2 = shift_image(msk2, shift_pnt)
@@ -122,7 +122,8 @@ class TrainData(Dataset):
             msk4 = shift_image(msk4, shift_pnt)
 
         if random.random() > 0.2:
-            rot_pnt = (img.shape[0] // 2 + random.randint(-320, 320), img.shape[1] // 2 + random.randint(-320, 320))
+            rot_pnt = (img.shape[0] // 2 + random.randint(-320, 320),
+                       img.shape[1] // 2 + random.randint(-320, 320))
             scale = 0.9 + random.random() * 0.2
             angle = random.randint(0, 20) - 10
             if (angle != 0) or (scale != 1):
@@ -134,29 +135,25 @@ class TrainData(Dataset):
                 msk3 = rotate_image(msk3, angle, scale, rot_pnt)
                 msk4 = rotate_image(msk4, angle, scale, rot_pnt)
 
-        crop_size = input_shape[0]
+        # ── Crop ──
+        crop_size = INPUT_SHAPE[0]
         if random.random() > 0.1:
-            crop_size = random.randint(int(input_shape[0] / 1.15), int(input_shape[0] / 0.85))
+            crop_size = random.randint(int(INPUT_SHAPE[0] / 1.15), int(INPUT_SHAPE[0] / 0.85))
 
         bst_x0 = random.randint(0, img.shape[1] - crop_size)
         bst_y0 = random.randint(0, img.shape[0] - crop_size)
         bst_sc = -1
-        try_cnt = random.randint(1, 10)
-        for i in range(try_cnt):
+        for _ in range(random.randint(1, 10)):
             x0 = random.randint(0, img.shape[1] - crop_size)
             y0 = random.randint(0, img.shape[0] - crop_size)
-            _sc = msk2[y0:y0 + crop_size, x0:x0 + crop_size].sum() * 5 + msk3[y0:y0 + crop_size,
-                                                                         x0:x0 + crop_size].sum() * 5 + msk4[
-                                                                                                        y0:y0 + crop_size,
-                                                                                                        x0:x0 + crop_size].sum() * 2 + msk1[
-                                                                                                                                       y0:y0 + crop_size,
-                                                                                                                                       x0:x0 + crop_size].sum()
+            _sc = (msk2[y0:y0 + crop_size, x0:x0 + crop_size].sum() * 5 +
+                   msk3[y0:y0 + crop_size, x0:x0 + crop_size].sum() * 5 +
+                   msk4[y0:y0 + crop_size, x0:x0 + crop_size].sum() * 2 +
+                   msk1[y0:y0 + crop_size, x0:x0 + crop_size].sum())
             if _sc > bst_sc:
-                bst_sc = _sc
-                bst_x0 = x0
-                bst_y0 = y0
-        x0 = bst_x0
-        y0 = bst_y0
+                bst_sc, bst_x0, bst_y0 = _sc, x0, y0
+        x0, y0 = bst_x0, bst_y0
+
         img = img[y0:y0 + crop_size, x0:x0 + crop_size, :]
         img2 = img2[y0:y0 + crop_size, x0:x0 + crop_size, :]
         msk0 = msk0[y0:y0 + crop_size, x0:x0 + crop_size]
@@ -165,94 +162,73 @@ class TrainData(Dataset):
         msk3 = msk3[y0:y0 + crop_size, x0:x0 + crop_size]
         msk4 = msk4[y0:y0 + crop_size, x0:x0 + crop_size]
 
-        if crop_size != input_shape[0]:
-            img = cv2.resize(img, input_shape, interpolation=cv2.INTER_LINEAR)
-            img2 = cv2.resize(img2, input_shape, interpolation=cv2.INTER_LINEAR)
-            msk0 = cv2.resize(msk0, input_shape, interpolation=cv2.INTER_LINEAR)
-            msk1 = cv2.resize(msk1, input_shape, interpolation=cv2.INTER_LINEAR)
-            msk2 = cv2.resize(msk2, input_shape, interpolation=cv2.INTER_LINEAR)
-            msk3 = cv2.resize(msk3, input_shape, interpolation=cv2.INTER_LINEAR)
-            msk4 = cv2.resize(msk4, input_shape, interpolation=cv2.INTER_LINEAR)
+        if crop_size != INPUT_SHAPE[0]:
+            img = cv2.resize(img, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            img2 = cv2.resize(img2, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            msk0 = cv2.resize(msk0, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            msk1 = cv2.resize(msk1, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            msk2 = cv2.resize(msk2, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            msk3 = cv2.resize(msk3, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
+            msk4 = cv2.resize(msk4, INPUT_SHAPE, interpolation=cv2.INTER_LINEAR)
 
+        # ── Color augmentation ──
         if random.random() > 0.96:
             img = shift_channels(img, random.randint(-5, 5), random.randint(-5, 5), random.randint(-5, 5))
         elif random.random() > 0.96:
             img2 = shift_channels(img2, random.randint(-5, 5), random.randint(-5, 5), random.randint(-5, 5))
-
         if random.random() > 0.96:
             img = change_hsv(img, random.randint(-5, 5), random.randint(-5, 5), random.randint(-5, 5))
         elif random.random() > 0.96:
             img2 = change_hsv(img2, random.randint(-5, 5), random.randint(-5, 5), random.randint(-5, 5))
 
-        if random.random() > 0.9:
-            if random.random() > 0.96:
-                img = clahe(img)
-            elif random.random() > 0.96:
-                img = gauss_noise(img)
-            elif random.random() > 0.96:
-                img = cv2.blur(img, (3, 3))
-        elif random.random() > 0.9:
-            if random.random() > 0.96:
-                img = saturation(img, 0.9 + random.random() * 0.2)
-            elif random.random() > 0.96:
-                img = brightness(img, 0.9 + random.random() * 0.2)
-            elif random.random() > 0.96:
-                img = contrast(img, 0.9 + random.random() * 0.2)
-
-        if random.random() > 0.9:
-            if random.random() > 0.96:
-                img2 = clahe(img2)
-            elif random.random() > 0.96:
-                img2 = gauss_noise(img2)
-            elif random.random() > 0.96:
-                img2 = cv2.blur(img2, (3, 3))
-        elif random.random() > 0.9:
-            if random.random() > 0.96:
-                img2 = saturation(img2, 0.9 + random.random() * 0.2)
-            elif random.random() > 0.96:
-                img2 = brightness(img2, 0.9 + random.random() * 0.2)
-            elif random.random() > 0.96:
-                img2 = contrast(img2, 0.9 + random.random() * 0.2)
+        for im, cond in [(img, 0.9), (img2, 0.9)]:
+            if random.random() > cond:
+                if random.random() > 0.96:
+                    im[...] = clahe(im)
+                elif random.random() > 0.96:
+                    im[...] = gauss_noise(im)
+                elif random.random() > 0.96:
+                    im[...] = cv2.blur(im, (3, 3))
+            elif random.random() > cond:
+                if random.random() > 0.96:
+                    im[...] = saturation(im, 0.9 + random.random() * 0.2)
+                elif random.random() > 0.96:
+                    im[...] = brightness(im, 0.9 + random.random() * 0.2)
+                elif random.random() > 0.96:
+                    im[...] = contrast(im, 0.9 + random.random() * 0.2)
 
         if random.random() > 0.96:
             el_det = self.elastic.to_deterministic()
             img = el_det.augment_image(img)
-
         if random.random() > 0.96:
             el_det = self.elastic.to_deterministic()
             img2 = el_det.augment_image(img2)
 
-        msk0 = msk0[..., np.newaxis]
-        msk1 = msk1[..., np.newaxis]
-        msk2 = msk2[..., np.newaxis]
-        msk3 = msk3[..., np.newaxis]
-        msk4 = msk4[..., np.newaxis]
+        # ── Build multi-class mask ──
+        msks = np.stack([msk0, msk1, msk2, msk3, msk4], axis=2)
+        msks = (msks > 127)
+        # damage hierarchy logic (original paper)
+        msks[..., 0] = True
+        msks[..., 1] = dilation(msks[..., 1], square(5))
+        msks[..., 2] = dilation(msks[..., 2], square(5))
+        msks[..., 3] = dilation(msks[..., 3], square(5))
+        msks[..., 4] = dilation(msks[..., 4], square(5))
+        msks[..., 1][msks[..., 2:].max(axis=2)] = False
+        msks[..., 3][msks[..., 2]] = False
+        msks[..., 4][msks[..., 2]] = False
+        msks[..., 4][msks[..., 3]] = False
+        msks[..., 0][msks[..., 1:].max(axis=2)] = False
+        msks = msks.astype(np.float32)
 
-        msk = np.concatenate([msk0, msk1, msk2, msk3, msk4], axis=2)
-        msk = (msk > 127)
+        lbl_msk = msks.argmax(axis=2)
 
-        msk[..., 0] = True
-        msk[..., 1] = dilation(msk[..., 1], square(5))
-        msk[..., 2] = dilation(msk[..., 2], square(5))
-        msk[..., 3] = dilation(msk[..., 3], square(5))
-        msk[..., 4] = dilation(msk[..., 4], square(5))
-        msk[..., 1][msk[..., 2:].max(axis=2)] = False
-        msk[..., 3][msk[..., 2]] = False
-        msk[..., 4][msk[..., 2]] = False
-        msk[..., 4][msk[..., 3]] = False
-        msk[..., 0][msk[..., 1:].max(axis=2)] = False
-        msk = msk * 1
+        img_cat = np.concatenate([img, img2], axis=2)
+        img_cat = preprocess_inputs(img_cat)
 
-        lbl_msk = msk.argmax(axis=2)
+        img_t = torch.from_numpy(img_cat.transpose((2, 0, 1))).float()
+        msk_t = torch.from_numpy(msks.transpose((2, 0, 1))).long()
 
-        img = np.concatenate([img, img2], axis=2)
-        img = preprocess_inputs(img)
-
-        img = torch.from_numpy(img.transpose((2, 0, 1))).float()
-        msk = torch.from_numpy(msk.transpose((2, 0, 1))).long()
-
-        sample = {'img': img, 'msk': msk, 'lbl_msk': lbl_msk, 'fn': fn}
-        return sample
+        return {'img': img_t, 'msk': msk_t, 'lbl_msk': lbl_msk, 'fn': fn}
 
 
 class ValData(Dataset):
@@ -265,201 +241,190 @@ class ValData(Dataset):
 
     def __getitem__(self, idx):
         _idx = self.image_idxs[idx]
-
         fn = all_files[_idx]
 
         img = cv2.imread(fn, cv2.IMREAD_COLOR)
         img2 = cv2.imread(fn.replace('_pre_disaster', '_post_disaster'), cv2.IMREAD_COLOR)
-        # print("show__name", path.join(loc_folder, '{0}.png'.format(fn.split('/')[-1].replace('.png', '_part1.png'))))
-        msk_loc = cv2.imread(path.join(loc_folder, '{0}.png'.format(fn.split('/')[-1].replace('.png', '_part1.png'))),
-                             cv2.IMREAD_UNCHANGED) > (0.4 * 255)
+
+        # Load stage-1 predicted localization mask (if available)
+        loc_path = os.path.join(LOC_FOLDER,
+            f"{fn.split('/')[-1].replace('.png', '_part1.png')}")
+        msk_loc = np.zeros((1024, 1024), dtype=bool)
+        if os.path.exists(loc_path):
+            msk_loc = cv2.imread(loc_path, cv2.IMREAD_UNCHANGED) > int(0.4 * 255)
 
         msk0 = cv2.imread(fn.replace('/images/', '/masks/'), cv2.IMREAD_UNCHANGED)
-        lbl_msk1 = cv2.imread(fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster'),
-                              cv2.IMREAD_UNCHANGED)  # lable buliding lable
-        msk1 = np.zeros_like(lbl_msk1)
-        msk2 = np.zeros_like(lbl_msk1)
-        msk3 = np.zeros_like(lbl_msk1)
-        msk4 = np.zeros_like(lbl_msk1)
-        msk1[lbl_msk1 == 1] = 255
-        msk2[lbl_msk1 == 2] = 255
-        msk3[lbl_msk1 == 3] = 255
-        msk4[lbl_msk1 == 4] = 255
+        lbl_msk1 = cv2.imread(
+            fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster'),
+            cv2.IMREAD_UNCHANGED)
 
-        msk0 = msk0[..., np.newaxis]
-        msk1 = msk1[..., np.newaxis]
-        msk2 = msk2[..., np.newaxis]
-        msk3 = msk3[..., np.newaxis]
-        msk4 = msk4[..., np.newaxis]
-        msk = np.concatenate([msk0, msk1, msk2, msk3, msk4], axis=2)
-        msk = (msk > 127)
+        msk1 = (lbl_msk1 == 1).astype(np.uint8) * 255
+        msk2 = (lbl_msk1 == 2).astype(np.uint8) * 255
+        msk3 = (lbl_msk1 == 3).astype(np.uint8) * 255
+        msk4 = (lbl_msk1 == 4).astype(np.uint8) * 255
 
-        msk = msk * 1
+        msks = np.stack([msk0, msk1, msk2, msk3, msk4], axis=2)
+        msks = (msks > 127).astype(np.float32)
+        lbl_msk = msks[..., 1:].argmax(axis=2)
 
-        lbl_msk = msk[..., 1:].argmax(axis=2)
+        img_cat = np.concatenate([img, img2], axis=2)
+        img_cat = preprocess_inputs(img_cat)
 
-        img = np.concatenate([img, img2], axis=2)
-        img = preprocess_inputs(img)
+        img_t = torch.from_numpy(img_cat.transpose((2, 0, 1))).float()
+        msk_t = torch.from_numpy(msks.transpose((2, 0, 1))).long()
 
-        img = torch.from_numpy(img.transpose((2, 0, 1))).float()
-        msk = torch.from_numpy(msk.transpose((2, 0, 1))).long()
-
-        sample = {'img': img, 'msk': msk, 'lbl_msk': lbl_msk, 'fn': fn, 'msk_loc': msk_loc}
-        return sample
+        return {'img': img_t, 'msk': msk_t, 'lbl_msk': lbl_msk, 'fn': fn,
+                'msk_loc': msk_loc}
 
 
+# ── Validation ────────────────────────────────────────────────────────
 def validate(net, data_loader):
-    dices0 = []
-
     tp = np.zeros((5,))
     fp = np.zeros((5,))
     fn = np.zeros((5,))
-
-    _thr = 0.4
+    thr = 0.4
 
     with torch.no_grad():
-        for i, sample in enumerate(tqdm(data_loader)):
+        for sample in tqdm(data_loader, disable=not is_main(), desc='Val'):
             msks = sample["msk"].numpy()
             lbl_msk = sample["lbl_msk"].numpy()
             imgs = sample["img"].cuda(non_blocking=True)
-            msk_loc = sample["msk_loc"].numpy() * 1
+            msk_loc = sample["msk_loc"].numpy().astype(bool)
 
-            out = model(imgs)
-            print("test_____________:", imgs.shape, out.shape)
+            out = net(imgs)
             msk_pred = msk_loc
             msk_damage_pred = torch.softmax(out, dim=1).cpu().numpy()[:, 1:, ...]
 
             for j in range(msks.shape[0]):
-                tp[4] += np.logical_and(msks[j, 0] > 0, msk_pred[j] > 0).sum()
-                fn[4] += np.logical_and(msks[j, 0] < 1, msk_pred[j] > 0).sum()
-                fp[4] += np.logical_and(msks[j, 0] > 0, msk_pred[j] < 1).sum()
+                gt_bld = msks[j, 0] > 0
+                tp[4] += (gt_bld & msk_pred[j]).sum()
+                fn[4] += (~gt_bld & msk_pred[j]).sum()
+                fp[4] += (gt_bld & ~msk_pred[j]).sum()
 
-                targ = lbl_msk[j][msks[j, 0] > 0]
+                targ = lbl_msk[j][gt_bld]
                 pred = msk_damage_pred[j].argmax(axis=0)
-                pred = pred * (msk_pred[j] > _thr)
-                pred = pred[msks[j, 0] > 0]
+                pred = pred * (msk_pred[j] > thr)
+                pred = pred[gt_bld]
                 for c in range(4):
-                    tp[c] += np.logical_and(pred == c, targ == c).sum()
-                    fn[c] += np.logical_and(pred != c, targ == c).sum()
-                    fp[c] += np.logical_and(pred == c, targ != c).sum()
+                    tp[c] += ((pred == c) & (targ == c)).sum()
+                    fn[c] += ((pred != c) & (targ == c)).sum()
+                    fp[c] += ((pred == c) & (targ != c)).sum()
 
-    d0 = 2 * tp[4] / (2 * tp[4] + fp[4] + fn[4])
-
-    f1_sc = np.zeros((4,))
+    d0 = 2 * tp[4] / (2 * tp[4] + fp[4] + fn[4] + 1e-8)
+    f1_sc = np.zeros(4)
     for c in range(4):
-        f1_sc[c] = 2 * tp[c] / (2 * tp[c] + fp[c] + fn[c])
-
+        f1_sc[c] = 2 * tp[c] / (2 * tp[c] + fp[c] + fn[c] + 1e-8)
     f1 = 4 / np.sum(1.0 / (f1_sc + 1e-6))
-
     sc = 0.3 * d0 + 0.7 * f1
-    print(
-        "Val Score: {}, Dice: {}, F1: {}, F1_0: {}, F1_1: {}, F1_2: {}, F1_3: {}".format(sc, d0, f1, f1_sc[0], f1_sc[1],
-                                                                                         f1_sc[2], f1_sc[3]))
+
+    dprint(f"Val Score: {sc:.4f}, Dice: {d0:.4f}, F1: {f1:.4f}, "
+           f"F1_0:{f1_sc[0]:.4f} F1_1:{f1_sc[1]:.4f} F1_2:{f1_sc[2]:.4f} F1_3:{f1_sc[3]:.4f}")
     return sc
 
 
 def evaluate_val(data_val, best_score, model, snapshot_name, current_epoch):
-    model = model.eval()
-    d = validate(model, data_loader=data_val)
-
+    model.eval()
+    d = validate(model, data_val)
+    if not is_main():
+        return best_score
     if d > best_score:
-        torch.save({
-            'epoch': current_epoch + 1,
-            'state_dict': model.state_dict(),
-            'best_score': d,
-        }, path.join(models_folder, snapshot_name + '_best14'))
+        torch.save(
+            {'epoch': current_epoch + 1, 'state_dict': model.module.state_dict(),
+             'best_score': d},
+            os.path.join(MODELS_FOLDER, snapshot_name + '_best14'))
         best_score = d
-
-    print("score: {}\tscore_best: {}".format(d, best_score))
+    dprint(f"score: {d:.4f}\tscore_best: {best_score:.4f}")
     return best_score
 
 
-def train_epoch(current_epoch, seg_loss, ce_loss, trplet_loss, model, optimizer, scheduler, train_data_loader):
-    losses = AverageMeter()
-    losses1 = AverageMeter()
-
-    dices = AverageMeter()
-
-    iterator = tqdm(train_data_loader)
+# ── Training epoch ────────────────────────────────────────────────────
+def train_epoch(current_epoch, seg_loss, ce_loss, model, optimizer, scheduler,
+                train_loader, sampler):
+    losses_seg = AverageMeter()
+    losses_cce = AverageMeter()
+    dices_m = AverageMeter()
     model.train()
-    for i, sample in enumerate(iterator):
+    sampler.set_epoch(current_epoch)
+
+    iterator = train_loader
+    if is_main():
+        iterator = tqdm(train_loader, desc=f'Epoch {current_epoch}')
+
+    for sample in iterator:
         imgs = sample["img"].cuda(non_blocking=True)
         msks = sample["msk"].cuda(non_blocking=True)
         lbl_msk = sample["lbl_msk"].cuda(non_blocking=True)
 
         out = model(imgs)
-        loss0 = seg_loss(out[:, 0, ...], msks[:, 0, ...])
-        loss1 = seg_loss(out[:, 1, ...], msks[:, 1, ...])
-        loss2 = seg_loss(out[:, 2, ...], msks[:, 2, ...])
-        loss3 = seg_loss(out[:, 3, ...], msks[:, 3, ...])
-        loss4 = seg_loss(out[:, 4, ...], msks[:, 4, ...])
-
-        weight = torch.from_numpy(np.array([1 / 9697, 1 / 23, 1 / 1.85, 1 / 2.85, 1 / 1.85])).cuda()
-        ce_loss = nn.CrossEntropyLoss(weight=weight).cuda()
-        ce_loss = nn.CrossEntropyLoss().cuda()
+        loss0 = seg_loss(out[:, 0, ...], msks[:, 0, ...].float())
+        loss1 = seg_loss(out[:, 1, ...], msks[:, 1, ...].float())
+        loss2 = seg_loss(out[:, 2, ...], msks[:, 2, ...].float())
+        loss3 = seg_loss(out[:, 3, ...], msks[:, 3, ...].float())
+        loss4 = seg_loss(out[:, 4, ...], msks[:, 4, ...].float())
         loss5 = ce_loss(out, lbl_msk)
-        loss = 0.1 * loss0 + 0.1 * loss1 + 0.1 * loss2 + 0.6 * loss3 + 0.1 * loss4 + loss5 * 11  # + loss6
-        # print("seg_loss1={}, seg_loss2={}, weight_loss={}".format(0.1*loss0,0.1*loss1,11*loss5))
+        loss = (0.1 * loss0 + 0.1 * loss1 + 0.1 * loss2 + 0.6 * loss3 +
+                0.1 * loss4 + 11 * loss5)
+
         with torch.no_grad():
-            _probs = 1 - torch.sigmoid(out[:, 0, ...])
-            dice_sc = 1 - dice_round(_probs, 1 - msks[:, 0, ...])
+            probs = 1 - torch.sigmoid(out[:, 0, ...])
+            dice_sc = 1 - dice_round(probs, 1 - msks[:, 0, ...])
 
-        losses.update(loss.item(), imgs.size(0))
-        losses1.update(loss5.item(), imgs.size(0))
+        losses_seg.update(loss.item(), imgs.size(0))
+        losses_cce.update(loss5.item(), imgs.size(0))
+        dices_m.update(dice_sc, imgs.size(0))
 
-        dices.update(dice_sc, imgs.size(0))
-        # triplets.update(loss6.item(), imgs.size(0))
-
-        iterator.set_description(
-            "epoch: {}; lr {:.7f}; Loss {loss.val:.4f} ({loss.avg:.4f}); cce_loss {loss1.val:.4f} ({loss1.avg:.4f}); Dice {dice.val:.4f} ({dice.avg:.4f})".format(
-                current_epoch, scheduler.get_lr()[-1], loss=losses, loss1=losses1, dice=dices))
-        # print("triplet loss", loss6)
         optimizer.zero_grad()
-        # loss.backward()
-
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), 0.999)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.999)
         optimizer.step()
 
-    scheduler.step(current_epoch)
-    print("epoch: {}; lr {:.7f}; Loss {loss.avg:.4f}; CCE_loss {loss1.avg:.4f}; Dice {dice.avg:.4f}".format(
-        current_epoch, scheduler.get_lr()[-1], loss=losses, loss1=losses1, dice=dices))
-    return losses.avg, losses1.avg
+        if is_main() and hasattr(iterator, 'set_description'):
+            iterator.set_description(
+                f"epoch: {current_epoch}; lr {scheduler.get_last_lr()[-1]:.7f}; "
+                f"Loss {losses_seg.val:.4f} ({losses_seg.avg:.4f}); "
+                f"CCE {losses_cce.val:.4f} ({losses_cce.avg:.4f}); "
+                f"Dice {dices_m.val:.4f} ({dices_m.avg:.4f})")
+
+    scheduler.step()
+    dprint(f"epoch: {current_epoch}; lr {scheduler.get_last_lr()[-1]:.7f}; "
+           f"Loss {losses_seg.avg:.4f}; CCE {losses_cce.avg:.4f}; "
+           f"Dice {dices_m.avg:.4f}")
+    return losses_seg.avg, losses_cce.avg
 
 
+# ── Main ──────────────────────────────────────────────────────────────
 if __name__ == '__main__':
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend='nccl')
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+
+    dprint(f'DDP: rank={rank}/{world_size}, GPU={torch.cuda.get_device_name(local_rank)}')
+
     t0 = timeit.default_timer()
-
-    makedirs(models_folder, exist_ok=True)
-    seed = int(3)  # (sys.argv[1])
-    # vis_dev = sys.argv[2]
-
-    # os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-    # os.environ["CUDA_VISIBLE_DEVICES"] = vis_dev
+    seed = 3
+    np.random.seed(seed + rank)
+    random.seed(seed + rank)
+    torch.manual_seed(seed + rank)
 
     cudnn.benchmark = True
 
-    batch_size = 4
-    val_batch_size = 2
-
-    snapshot_name = 'res50_cls_cce_{}_0'.format(seed)
-
+    # ── Build class-balanced training indices ──
     file_classes = []
-    for fn in tqdm(all_files):
-        fl = np.zeros((4,), dtype=bool)
-        msk1 = cv2.imread(fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster'),
-                          cv2.IMREAD_UNCHANGED)
+    for fn in tqdm(all_files, disable=not is_main(), desc='Scan classes'):
+        fl = np.zeros(4, dtype=bool)
+        msk_path = fn.replace('/images/', '/masks/').replace('_pre_disaster', '_post_disaster')
+        msk1 = cv2.imread(msk_path, cv2.IMREAD_UNCHANGED)
         for c in range(1, 5):
             fl[c - 1] = c in msk1
         file_classes.append(fl)
     file_classes = np.asarray(file_classes)
 
-    train_idxs0, val_idxs0 = train_test_split(np.arange(len(all_files)), test_size=0.1, random_state=seed)
+    train_idxs0, val_idxs0 = train_test_split(np.arange(len(all_files)),
+                                               test_size=0.1, random_state=seed)
 
-    np.random.seed(seed + 1234)
-    random.seed(seed + 1234)
-
+    # Over-sample damaged images for class balance
     train_idxs = []
     for i in train_idxs0:
         train_idxs.append(i)
@@ -468,71 +433,73 @@ if __name__ == '__main__':
         if file_classes[i, 1:3].max():
             train_idxs.append(i)
     train_idxs = np.asarray(train_idxs)
-    steps_per_epoch = len(train_idxs) // batch_size
 
     data_train = TrainData(train_idxs)
     val_train = ValData(val_idxs0)
 
-    train_data_loader = DataLoader(data_train, batch_size=batch_size, num_workers=6, shuffle=True, pin_memory=False,
-                                   drop_last=True)
-    val_data_loader = DataLoader(val_train, batch_size=val_batch_size, num_workers=6, shuffle=False, pin_memory=False)
+    train_sampler = DistributedSampler(data_train, num_replicas=world_size, rank=rank,
+                                        shuffle=True, seed=seed)
+    val_sampler = DistributedSampler(val_train, num_replicas=world_size, rank=rank,
+                                      shuffle=False)
 
-    model = GFormer_two().cuda()
-    # model.load_state_dict(torch.load('/home/newdisk/xww/xview2_1st_place_solution/weights_segformer1/GFfomer_cls_cce_3_0_best.pth'))
-    params = model.parameters()
+    batch_size = 4
+    val_batch_size = 4
 
-    optimizer = AdamW(params, lr=0.0002, weight_decay=1e-6)
+    train_loader = DataLoader(data_train, batch_size=batch_size, sampler=train_sampler,
+                               num_workers=4, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_train, batch_size=val_batch_size, sampler=val_sampler,
+                             num_workers=4, pin_memory=True)
 
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    dprint(f'Train: {len(train_idxs)} imgs (oversampled), {len(train_loader)} batches/epoch')
+    dprint(f'Val:   {len(val_idxs0)} imgs, {len(val_loader)} batches')
 
-    scheduler = lr_scheduler.MultiStepLR(optimizer,
-                                         milestones=[3, 9], gamma=0.5)
-    # scheduler = lr_scheduler.MultiStepLR(optimizer,
-    #                                      milestones=[3, 9, 13], gamma=0.5) #0.7587652794
-    # scheduler = lr_scheduler.MultiStepLR(optimizer,
-    #                                      milestones=[5, 10, 20], gamma=0.5)
-    # scheduler = lr_scheduler.MultiStepLR(optimizer,
-    #                                      milestones=[3, 5, 17, 25], gamma=0.5)
-    snap_to_load = 'res50_loc_{}_0_best2'.format(seed)
-    print("=> loading checkpoint '{}'".format(snap_to_load))
-    checkpoint = torch.load(path.join(models_folder, snap_to_load), map_location='cpu')
-    loaded_dict = checkpoint['state_dict']
-    sd = model.state_dict()
-    for k in model.state_dict():
-        if k in loaded_dict and sd[k].size() == loaded_dict[k].size():
-            sd[k] = loaded_dict[k]
-    loaded_dict = sd
-    model.load_state_dict(loaded_dict)
-    print("loaded checkpoint '{}' (epoch {}, best_score {})"
-          .format(snap_to_load, checkpoint['epoch'], checkpoint['best_score']))
-    del loaded_dict
-    del sd
-    del checkpoint
-    gc.collect()
-    torch.cuda.empty_cache()
+    # ── Model ──
+    model = GFformer_two().cuda(local_rank)
 
-    model = nn.DataParallel(model).cuda()
-    model = model.cuda()
+    # Load stage-1 weights
+    snap_to_load = f'GFformer_loc_{seed}_0_best2'
+    dprint(f"Loading stage-1 checkpoint '{snap_to_load}'...")
+    ckpt_path = os.path.join(MODELS_FOLDER, snap_to_load)
+    if os.path.exists(ckpt_path):
+        checkpoint = torch.load(ckpt_path, map_location='cpu')
+        loaded_dict = checkpoint['state_dict']
+        sd = model.state_dict()
+        for k in model.state_dict():
+            if k in loaded_dict and sd[k].size() == loaded_dict[k].size():
+                sd[k] = loaded_dict[k]
+        model.load_state_dict(sd)
+        dprint(f"  loaded (epoch {checkpoint['epoch']}, best_score {checkpoint['best_score']:.4f})")
+        del loaded_dict, sd, checkpoint
+        gc.collect()
+    else:
+        dprint(f"  WARNING: {ckpt_path} not found — training from scratch!")
 
-    # seg_loss = ComboLoss({'dice': 0.5, 'focal': 8.0}, per_image=False).cuda()
-    seg_loss = ComboLoss({'dice': 0.5, "focal": 8.0}, per_image=False).cuda()
+    optimizer = AdamW(model.parameters(), lr=0.0002, weight_decay=1e-6)
+    # FP32 full precision (no AMP — stable for DDP training)
+    model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
+
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[3, 9], gamma=0.5)
+
+    seg_loss = ComboLoss({'dice': 0.5, 'focal': 8.0}, per_image=False).cuda()
     ce_loss = nn.CrossEntropyLoss().cuda()
-    triplet_loss = TripletMarginLoss().cuda()
 
-    best_score = 0
+    # ── Training loop ──
+    best_score = 0.0
+    total_epochs = 30
+    snapshot_name = f'GFformer_cls_{seed}_0'
+
+    dprint(f'Starting Stage 2 training: {total_epochs} epochs, '
+           f'eff_BS={batch_size * world_size}')
     torch.cuda.empty_cache()
-    writer = SummaryWriter()
-    for epoch in range(50):
-        losses, losses1 = train_epoch(epoch, seg_loss, ce_loss, triplet_loss, model, optimizer, scheduler,
-                                      train_data_loader)
-        print("show the type", losses, losses1)
+
+    for epoch in range(total_epochs):
+        ls, lc = train_epoch(epoch, seg_loss, ce_loss, model, optimizer, scheduler,
+                             train_loader, train_sampler)
         if epoch % 2 == 0:
             torch.cuda.empty_cache()
-            best_score = evaluate_val(val_data_loader, best_score, model, snapshot_name, epoch)
-        writer.add_scalar('train/loss_seg', losses, epoch)  # 画loss，横坐标为epoch
-        writer.add_scalar('train/loss_cce', losses1, epoch)  # 画loss，横坐标为epoch
-        writer.add_scalar('train/score', best_score, epoch)
-        writer.add_scalar('train/lr', scheduler.get_lr()[-1], epoch)
-    writer.close()
+            best_score = evaluate_val(val_loader, best_score, model, snapshot_name, epoch)
+        barrier()
+
+    dist.destroy_process_group()
     elapsed = timeit.default_timer() - t0
-    print('Time: {:.3f} min'.format(elapsed / 60))
+    dprint(f'Stage 2 done. Time: {elapsed / 60:.1f} min ({elapsed / 3600:.2f} h)')

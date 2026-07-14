@@ -29,8 +29,8 @@ class Transformer(nn.Module):
         ## initilize encoder
         if pretrained:
             state_dict = torch.load(backbone + '.pth')
-            state_dict.pop('head.weight')
-            state_dict.pop('head.bias')
+            state_dict.pop('head.weight', None)
+            state_dict.pop('head.bias', None)
             self.encoder.load_state_dict(state_dict, )
 def Encoder():
     model = Transformer("mit_b3", pretrained=True)
@@ -111,7 +111,7 @@ class GFformer_one(nn.Module):
         out = [r1, r2, r3, r4]
         out = self.decoder(out)
         return out
-   class Decoder_double(nn.Module):
+class Decoder_double(nn.Module):
     def __init__(self, num_classes = 1, decoder_dim = 256):
         super(Decoder_double, self).__init__()
         encoder_filters = [64, 128, 320, 512]
@@ -221,6 +221,32 @@ class GF_module(nn.Module):
 
         out = self.conv_out(fus_rgb + fus_t)
         return out
+class Gconv(nn.Module):
+    """Graph convolution: 1x1 conv acting as per-pixel MLP along channel dim."""
+    def __init__(self, in_ch, out_ch):
+        super(Gconv, self).__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, 1)
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+class Gconv_Shuffle(nn.Module):
+    """Graph convolution with channel shuffle for cross-group information flow."""
+    def __init__(self, in_ch, out_ch):
+        super(Gconv_Shuffle, self).__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, 1)
+
+    def forward(self, x):
+        x = self.conv(x)
+        B, C, H, W = x.shape
+        g = min(4, C)
+        x = x.view(B, g, C // g, H, W)
+        x = x.permute(0, 2, 1, 3, 4).contiguous()
+        x = x.view(B, C, H, W)
+        return x
+
+
 class CSGF(nn.Module):
     def __init__(self, in_ch, h, in_glo):
         super(CSGF, self).__init__()

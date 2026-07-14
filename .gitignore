@@ -1,0 +1,33 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Datasets and generated artifacts
+data/
+loc_segformer/
+logs/
+runs/
+tune_weight/
+
+# Model weights and checkpoints
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
