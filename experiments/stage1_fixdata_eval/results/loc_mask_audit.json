@@ -1,0 +1,35 @@
+{
+  "split": {
+    "total_files": 9168,
+    "val_size": 917,
+    "test_size": 0.1,
+    "random_state": 3
+  },
+  "loc_masks_dir": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/loc_masks",
+  "masks_on_disk": 9168,
+  "missing": {
+    "count": 0,
+    "samples": []
+  },
+  "broken": {
+    "count": 0,
+    "samples": []
+  },
+  "metrics": {
+    "TP": 25280343,
+    "FP": 3563727,
+    "FN": 3855507,
+    "mean_per_image_dice": 0.8846602188193894,
+    "global_F1": 0.8720378710422505,
+    "global_IoU": 0.7731091750819896,
+    "per_image_dice_min": 0.0,
+    "per_image_dice_max": 1.0
+  },
+  "expectations": {
+    "missing_eq_0": true,
+    "broken_eq_0": true,
+    "mean_dice_approx_0.883": true,
+    "global_f1_approx_0.863": true
+  },
+  "audited_at": "2026-09-22T13:17:26"
+}

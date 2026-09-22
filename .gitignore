@@ -25,6 +25,7 @@ tune_weight/
 experiments/stage1_fixdata_eval/ckpt/
 experiments/stage1_fixdata_eval/loc_masks/
 experiments/stage2_fixdata/ckpt/
+experiments/stage2_fixdata/ckpt_smoke/
 
 # Archives
 *.zip

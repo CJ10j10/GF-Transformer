@@ -34,6 +34,7 @@ sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, 'model'))
 from gfmodel import GFformer_two
 from paths import STAGE1_LOC_CKPT  # the ONLY allowed Stage-1 checkpoint
+from ckpt_transfer import transfer_stage1_weights  # explicit encoder mapping
 
 DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
@@ -469,19 +470,16 @@ if __name__ == '__main__':
     # Load stage-1 weights — ONLY the frozen, independently re-evaluated
     # checkpoint defined in paths.STAGE1_LOC_CKPT
     # (see experiments/stage1_fixdata_eval/README.md). Never tune_weight/.
+    # Backbone keys differ between the two models ('encoder.*' vs
+    # 'rgb_net.*'/'post_net.*'), so same-name matching would transfer
+    # nothing — use the explicit mapping in ckpt_transfer.py (Gate 2).
     ckpt_path = STAGE1_LOC_CKPT
     dprint(f"Loading stage-1 checkpoint '{ckpt_path}'...")
     if os.path.exists(ckpt_path):
-        checkpoint = torch.load(ckpt_path, map_location='cpu')
-        loaded_dict = checkpoint['state_dict']
-        sd = model.state_dict()
-        for k in model.state_dict():
-            if k in loaded_dict and sd[k].size() == loaded_dict[k].size():
-                sd[k] = loaded_dict[k]
-        model.load_state_dict(sd)
-        dprint(f"  loaded (epoch {checkpoint['epoch']}, best_score {checkpoint['best_score']:.4f})")
-        del loaded_dict, sd, checkpoint
-        gc.collect()
+        report = transfer_stage1_weights(model, ckpt_path, verbose=is_main())
+        dprint(f"  backbone transfer coverage {report['coverage_backbone']:.4f} "
+               f"({report['matched_backbone']}/{report['n_stage2_backbone']}) — "
+               f"Gate 2 requires > {0.95}")
     else:
         raise FileNotFoundError(
             f"Stage-1 checkpoint not found: {ckpt_path}. Restore it to "
