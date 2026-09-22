@@ -453,7 +453,12 @@ if __name__ == '__main__':
     train_sampler = DistributedSampler(data_train, num_replicas=world_size, rank=rank,
                                         shuffle=True, seed=seed)
     batch_size = 4
-    val_batch_size = 4
+    # Validation runs FP32 at full 1024x1024: the GFM bmm tensors
+    # ((B, h*w, h*w)) need ~4 GiB per batch element at 128x128 feature maps,
+    # so bs=4 OOMs on 24 GB (the legacy run used AMP, which halved this).
+    # Measured peak with bs=1: 4.4 GiB. Batch size does not change the
+    # metric values (per-image accumulation), only memory.
+    val_batch_size = 1
 
     train_loader = DataLoader(data_train, batch_size=batch_size, sampler=train_sampler,
                                num_workers=4, pin_memory=True, drop_last=True)

@@ -9,8 +9,11 @@ LOG=logs/stage2_smoke_fix.log
 CKPT_DIR=experiments/stage2_fixdata/ckpt
 : > "$LOG"
 
-setsid /usr/local/miniconda3/envs/gft/bin/torchrun --nproc_per_node=1 \
-    --master_port=29507 train_segformer_cls.py > "$LOG" 2>&1 &
+# torch 1.9 has no torchrun binary — use python -m torch.distributed.run
+# --max_restarts=0: fail fast instead of elastic-agent auto-retrying on OOM
+setsid /usr/local/miniconda3/envs/gft/bin/python -m torch.distributed.run \
+    --nproc_per_node=1 --master_port=29507 --max_restarts=0 \
+    train_segformer_cls.py > "$LOG" 2>&1 &
 PGID=$!
 
 while ! grep -aq "Val Score" "$LOG"; do
