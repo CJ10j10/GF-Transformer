@@ -5,15 +5,18 @@ import torch
 from tqdm import tqdm
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, 'model'))
 from gfmodel import GFformer_one
 from utils import preprocess_inputs
+from paths import STAGE1_LOC_CKPT  # the ONLY allowed Stage-1 checkpoint
 
 DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
-LOC_FOLDER = os.path.join(BASE_DIR, 'loc_segformer')
-EXP_NAME = 'fixdata'
-CKPT_PATH = os.path.join(BASE_DIR, 'tune_weight', f'GFformer_loc_3_{EXP_NAME}_best2')
+# Localization masks from the verified Stage-1 checkpoint, kept inside the
+# experiment directory — the legacy loc_segformer/ dir is no longer written.
+LOC_FOLDER = os.path.join(BASE_DIR, 'experiments', 'stage1_fixdata_eval', 'loc_masks')
+CKPT_PATH = STAGE1_LOC_CKPT
 os.makedirs(LOC_FOLDER, exist_ok=True)
 
 # Collect all pre-disaster images

@@ -30,13 +30,20 @@ from tqdm import tqdm
 
 # ── Paths ─────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, 'model'))
 from gfmodel import GFformer_two
+from paths import STAGE1_LOC_CKPT  # the ONLY allowed Stage-1 checkpoint
 
 DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
-MODELS_FOLDER = os.path.join(BASE_DIR, 'tune_weight')
-LOC_FOLDER = os.path.join(BASE_DIR, 'loc_segformer')
+# Stage-2 artifacts live in their own experiment directory — never mix with
+# the legacy tune_weight/ files.
+EXP_DIR = os.path.join(BASE_DIR, 'experiments', 'stage2_fixdata')
+MODELS_FOLDER = os.path.join(EXP_DIR, 'ckpt')
+# Localization masks generated from the verified Stage-1 checkpoint
+# (inference_loc.py writes here).
+LOC_FOLDER = os.path.join(BASE_DIR, 'experiments', 'stage1_fixdata_eval', 'loc_masks')
 INPUT_SHAPE = (512, 512)
 EXP_NAME = 'fixdata'
 os.makedirs(MODELS_FOLDER, exist_ok=True)
@@ -403,6 +410,10 @@ if __name__ == '__main__':
 
     dprint(f'DDP: rank={rank}/{world_size}, GPU={torch.cuda.get_device_name(local_rank)}')
 
+    if is_main() and not os.listdir(LOC_FOLDER):
+        print(f'WARNING: {LOC_FOLDER} is empty — run inference_loc.py first, '
+              f'otherwise Stage-2 validation uses empty localization masks.')
+
     t0 = timeit.default_timer()
     seed = 3
     np.random.seed(seed + rank)
@@ -455,10 +466,11 @@ if __name__ == '__main__':
     # ── Model ──
     model = GFformer_two().cuda(local_rank)
 
-    # Load stage-1 weights
-    snap_to_load = f'GFformer_loc_{seed}_{EXP_NAME}_best2'
-    dprint(f"Loading stage-1 checkpoint '{snap_to_load}'...")
-    ckpt_path = os.path.join(MODELS_FOLDER, snap_to_load)
+    # Load stage-1 weights — ONLY the frozen, independently re-evaluated
+    # checkpoint defined in paths.STAGE1_LOC_CKPT
+    # (see experiments/stage1_fixdata_eval/README.md). Never tune_weight/.
+    ckpt_path = STAGE1_LOC_CKPT
+    dprint(f"Loading stage-1 checkpoint '{ckpt_path}'...")
     if os.path.exists(ckpt_path):
         checkpoint = torch.load(ckpt_path, map_location='cpu')
         loaded_dict = checkpoint['state_dict']
@@ -472,7 +484,9 @@ if __name__ == '__main__':
         gc.collect()
     else:
         raise FileNotFoundError(
-            f"Stage-1 checkpoint not found: {ckpt_path}. Run Stage 1 and inference_loc.py first.")
+            f"Stage-1 checkpoint not found: {ckpt_path}. Restore it to "
+            f"experiments/stage1_fixdata_eval/ckpt/ (sha256 "
+            f"cd9409890d146fcc020c5448fd533cccec4a9a2ea157542b43890cabbeed01ed).")
 
     optimizer = AdamW(model.parameters(), lr=0.0002, weight_decay=1e-6)
     # FP32 full precision (no AMP — stable for DDP training)

@@ -21,6 +21,11 @@ tune_weight/
 *.ckpt
 *.onnx
 
+# Experiment artifacts (metrics.json / README / scripts stay tracked)
+experiments/stage1_fixdata_eval/ckpt/
+experiments/stage1_fixdata_eval/loc_masks/
+experiments/stage2_fixdata/ckpt/
+
 # Archives
 *.zip
 *.tar

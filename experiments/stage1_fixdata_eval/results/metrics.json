@@ -1,0 +1,38 @@
+{
+  "checkpoint": {
+    "path": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/ckpt/GFformer_loc_fixdata_ep57_valdice0.8830_sha_cd940989.pt",
+    "sha256": "cd9409890d146fcc020c5448fd533cccec4a9a2ea157542b43890cabbeed01ed",
+    "size_mb": 224.1,
+    "recorded_epoch": 57,
+    "recorded_best_score": 0.8829796309160259
+  },
+  "split": {
+    "total_files": 9168,
+    "val_size": 917,
+    "test_size": 0.1,
+    "random_state": 3
+  },
+  "eval": {
+    "threshold": 0.5,
+    "batch_size": 4,
+    "full_resolution": true,
+    "augmentation": "none",
+    "TP": 24030828,
+    "FP": 2539458,
+    "FN": 5105022,
+    "TN": 929868884,
+    "precision": 0.9044248902702816,
+    "recall": 0.824785547701543,
+    "F1": 0.8627713112250327,
+    "IoU": 0.7586612259618755,
+    "mean_per_image_dice": 0.8829852348845902,
+    "per_image_dice_std": 0.17450381631549625,
+    "per_image_dice_min": 0.0,
+    "per_image_dice_max": 1.0
+  },
+  "gate": {
+    "requirement": "F1 >= 0.85",
+    "passed": true
+  },
+  "evaluated_at": "2026-09-22T06:52:20"
+}
