@@ -6,7 +6,7 @@ set -u
 cd /workspace/GF-Transformer
 
 LOG=logs/stage2_smoke_fix.log
-CKPT_DIR=experiments/stage2_fixdata/ckpt
+CKPT_DIR=experiments/stage2_fixdata/ckpt_baseline
 : > "$LOG"
 
 # torch 1.9 has no torchrun binary — use python -m torch.distributed.run

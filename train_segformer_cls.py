@@ -39,9 +39,10 @@ from ckpt_transfer import transfer_stage1_weights  # explicit encoder mapping
 DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
 # Stage-2 artifacts live in their own experiment directory — never mix with
-# the legacy tune_weight/ files.
+# the legacy tune_weight/ files, the smoke checkpoints (ckpt_smoke/), or
+# any previous Stage-2 run.
 EXP_DIR = os.path.join(BASE_DIR, 'experiments', 'stage2_fixdata')
-MODELS_FOLDER = os.path.join(EXP_DIR, 'ckpt')
+MODELS_FOLDER = os.path.join(EXP_DIR, 'ckpt_baseline')
 # Localization masks generated from the verified Stage-1 checkpoint
 # (inference_loc.py writes here).
 LOC_FOLDER = os.path.join(BASE_DIR, 'experiments', 'stage1_fixdata_eval', 'loc_masks')
