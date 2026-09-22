@@ -6,6 +6,12 @@
 #   bash run_train.sh              # Run both stages
 #   bash run_train.sh loc           # Run Stage 1 only
 #   bash run_train.sh cls           # Run Stage 2 only
+#
+# Before the new fixdata experiment:
+#   python preprocess.py
+#   bash run_train.sh loc
+#   python inference_loc.py
+#   bash run_train.sh cls
 # ===========================================================================
 
 set -euo pipefail
@@ -28,10 +34,10 @@ STAGE=${1:-all}
 if [[ "$STAGE" == "all" ]] || [[ "$STAGE" == "loc" ]]; then
     echo "============================================================================"
     echo " STAGE 1: Building Localization (GFformer_one)"
-    echo " 150 epochs | per-GPU BS=12 | eff BS=48 | ~2.7h expected"
+    echo " 200 epochs | per-GPU BS=4 | eff BS=16 | fixdata experiment"
     echo "============================================================================"
     torchrun --nproc_per_node=$NUM_GPUS --master_port=$MASTER_PORT \
-        train_segformer_loc.py 2>&1 | tee -a logs/stage1_loc.log
+        train_segformer_loc.py 2>&1 | tee -a logs/stage1_loc_fixdata.log
     echo "Stage 1 done."
 fi
 
@@ -39,10 +45,10 @@ fi
 if [[ "$STAGE" == "all" ]] || [[ "$STAGE" == "cls" ]]; then
     echo "============================================================================"
     echo " STAGE 2: Damage Classification (GFformer_two)"
-    echo " 30 epochs | per-GPU BS=6 | eff BS=24 | ~1.9h expected"
+    echo " 30 epochs | per-GPU BS=4 | eff BS=16 | requires fixdata Stage 1 + loc masks"
     echo "============================================================================"
     torchrun --nproc_per_node=$NUM_GPUS --master_port=$MASTER_PORT \
-        train_segformer_cls.py 2>&1 | tee -a logs/stage2_cls.log
+        train_segformer_cls.py 2>&1 | tee -a logs/stage2_cls_fixdata.log
     echo "Stage 2 done."
 fi
 

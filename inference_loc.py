@@ -12,7 +12,8 @@ from utils import preprocess_inputs
 DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
 LOC_FOLDER = os.path.join(BASE_DIR, 'loc_segformer')
-CKPT_PATH = os.path.join(BASE_DIR, 'tune_weight', 'GFformer_loc_3_0_best2')
+EXP_NAME = 'fixdata'
+CKPT_PATH = os.path.join(BASE_DIR, 'tune_weight', f'GFformer_loc_3_{EXP_NAME}_best2')
 os.makedirs(LOC_FOLDER, exist_ok=True)
 
 # Collect all pre-disaster images

@@ -36,6 +36,8 @@ DATA_BASE = os.path.join(BASE_DIR, 'data', 'xBD')
 TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')]
 MODELS_FOLDER = os.path.join(BASE_DIR, 'tune_weight')
 INPUT_SHAPE = (512, 512)
+EXP_NAME = os.environ.get('GF_EXP_NAME', 'fixdata')
+RESUME_FROM_CHECKPOINT = os.environ.get('GF_RESUME', '0') == '1'
 os.makedirs(MODELS_FOLDER, exist_ok=True)
 
 # ── DDP helpers ────────────────────────────────────────────────────────
@@ -192,10 +194,10 @@ def validate(net, data_loader):
 
 
 def evaluate_val(data_val, best_score, model, snapshot_name, current_epoch):
-    model.eval()
-    d = validate(model, data_val)
     if not is_main():
         return best_score
+    model.eval()
+    d = validate(model, data_val)
     if d > best_score:
         torch.save(
             {'epoch': current_epoch + 1, 'state_dict': model.module.state_dict(),
@@ -275,15 +277,13 @@ if __name__ == '__main__':
 
     train_sampler = DistributedSampler(data_train, num_replicas=world_size, rank=rank,
                                         shuffle=True, seed=seed)
-    val_sampler = DistributedSampler(val_train, num_replicas=world_size, rank=rank,
-                                      shuffle=False)
-
-    batch_size = 12
-    val_batch_size = 12
+    batch_size = int(os.environ.get('GF_BATCH_SIZE', 4))
+    val_batch_size = int(os.environ.get('GF_VAL_BATCH_SIZE', batch_size))
 
     train_loader = DataLoader(data_train, batch_size=batch_size, sampler=train_sampler,
                                num_workers=4, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_train, batch_size=val_batch_size, sampler=val_sampler,
+    # Validation is run only on rank0, over the full validation split.
+    val_loader = DataLoader(val_train, batch_size=val_batch_size, shuffle=False,
                              num_workers=4, pin_memory=True)
 
     dprint(f'Train: {len(train_idxs)} imgs, {len(train_loader)} batches/epoch')
@@ -296,8 +296,8 @@ if __name__ == '__main__':
     model = DDP(model, device_ids=[local_rank], find_unused_parameters=False)
 
     start_epoch = 0
-    ckpt_path = os.path.join(MODELS_FOLDER, f'GFformer_loc_{seed}_0_best2')
-    if os.path.exists(ckpt_path):
+    ckpt_path = os.path.join(MODELS_FOLDER, f'GFformer_loc_{seed}_{EXP_NAME}_best2')
+    if RESUME_FROM_CHECKPOINT and os.path.exists(ckpt_path):
         dprint(f"Resuming from checkpoint: {ckpt_path}")
         ckpt = torch.load(ckpt_path, map_location='cpu')
         model.module.load_state_dict(ckpt['state_dict'])
@@ -317,8 +317,8 @@ if __name__ == '__main__':
     seg_loss = ComboLoss({'dice': 1.0, 'focal': 6.0}, per_image=False).cuda()
 
     # ── Training loop ──
-    total_epochs = 150
-    snapshot_name = f'GFformer_loc_{seed}_0'
+    total_epochs = int(os.environ.get('GF_TOTAL_EPOCHS', 200))
+    snapshot_name = f'GFformer_loc_{seed}_{EXP_NAME}'
 
     dprint(f'Starting Stage 1 training: epochs {start_epoch}-{total_epochs-1}, '
            f'eff_BS={batch_size * world_size}, FP32 (no AMP)')

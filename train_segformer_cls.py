@@ -38,6 +38,7 @@ TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')
 MODELS_FOLDER = os.path.join(BASE_DIR, 'tune_weight')
 LOC_FOLDER = os.path.join(BASE_DIR, 'loc_segformer')
 INPUT_SHAPE = (512, 512)
+EXP_NAME = 'fixdata'
 os.makedirs(MODELS_FOLDER, exist_ok=True)
 os.makedirs(LOC_FOLDER, exist_ok=True)
 
@@ -323,10 +324,10 @@ def validate(net, data_loader):
 
 
 def evaluate_val(data_val, best_score, model, snapshot_name, current_epoch):
-    model.eval()
-    d = validate(model, data_val)
     if not is_main():
         return best_score
+    model.eval()
+    d = validate(model, data_val)
     if d > best_score:
         torch.save(
             {'epoch': current_epoch + 1, 'state_dict': model.module.state_dict(),
@@ -439,15 +440,13 @@ if __name__ == '__main__':
 
     train_sampler = DistributedSampler(data_train, num_replicas=world_size, rank=rank,
                                         shuffle=True, seed=seed)
-    val_sampler = DistributedSampler(val_train, num_replicas=world_size, rank=rank,
-                                      shuffle=False)
-
     batch_size = 4
     val_batch_size = 4
 
     train_loader = DataLoader(data_train, batch_size=batch_size, sampler=train_sampler,
                                num_workers=4, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_train, batch_size=val_batch_size, sampler=val_sampler,
+    # Validation is run only on rank0, over the full validation split.
+    val_loader = DataLoader(val_train, batch_size=val_batch_size, shuffle=False,
                              num_workers=4, pin_memory=True)
 
     dprint(f'Train: {len(train_idxs)} imgs (oversampled), {len(train_loader)} batches/epoch')
@@ -457,7 +456,7 @@ if __name__ == '__main__':
     model = GFformer_two().cuda(local_rank)
 
     # Load stage-1 weights
-    snap_to_load = f'GFformer_loc_{seed}_0_best2'
+    snap_to_load = f'GFformer_loc_{seed}_{EXP_NAME}_best2'
     dprint(f"Loading stage-1 checkpoint '{snap_to_load}'...")
     ckpt_path = os.path.join(MODELS_FOLDER, snap_to_load)
     if os.path.exists(ckpt_path):
@@ -472,7 +471,8 @@ if __name__ == '__main__':
         del loaded_dict, sd, checkpoint
         gc.collect()
     else:
-        dprint(f"  WARNING: {ckpt_path} not found — training from scratch!")
+        raise FileNotFoundError(
+            f"Stage-1 checkpoint not found: {ckpt_path}. Run Stage 1 and inference_loc.py first.")
 
     optimizer = AdamW(model.parameters(), lr=0.0002, weight_decay=1e-6)
     # FP32 full precision (no AMP — stable for DDP training)
@@ -486,7 +486,7 @@ if __name__ == '__main__':
     # ── Training loop ──
     best_score = 0.0
     total_epochs = 30
-    snapshot_name = f'GFformer_cls_{seed}_0'
+    snapshot_name = f'GFformer_cls_{seed}_{EXP_NAME}'
 
     dprint(f'Starting Stage 2 training: {total_epochs} epochs, '
            f'eff_BS={batch_size * world_size}')
