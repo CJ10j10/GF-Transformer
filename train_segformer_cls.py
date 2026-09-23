@@ -51,6 +51,17 @@ EXP_NAME = 'fixdata'
 os.makedirs(MODELS_FOLDER, exist_ok=True)
 os.makedirs(LOC_FOLDER, exist_ok=True)
 
+# ── Training protocol (repo-aligned baseline, single-GPU effective batch 32) ──
+PHYSICAL_BATCH = 4                    # batch per GPU
+VAL_BATCH = 1                         # FP32 full-res 1024x1024 validation
+GRAD_ACCUM_STEPS = int(os.environ.get('GF_GRAD_ACCUM', '8'))  # eff batch = 4 * 1 * 8 = 32
+LR = 2e-4
+WEIGHT_DECAY = 1e-6                   # repo-aligned AdamW (≈ Adam)
+MILESTONES = [3, 9]
+GAMMA = 0.5
+TOTAL_EPOCHS = 30
+AMP_ENABLED = False                   # FP32 full precision
+
 # ── DDP helpers ───────────────────────────────────────────────────────
 def is_main():
     return not dist.is_initialized() or dist.get_rank() == 0
@@ -349,7 +360,17 @@ def evaluate_val(data_val, best_score, model, snapshot_name, current_epoch):
 
 # ── Training epoch ────────────────────────────────────────────────────
 def train_epoch(current_epoch, seg_loss, ce_loss, model, optimizer, scheduler,
-                train_loader, sampler):
+                train_loader, sampler, grad_accum=1, world_size=1):
+    """One training epoch with gradient accumulation.
+
+    Accumulation contract:
+      * per micro-batch loss is scaled by 1/grad_accum before backward
+      * optimizer.step() + clip only after a full accumulation cycle
+        (or on the trailing partial batch at the end of the epoch)
+      * optimizer.zero_grad() only after an optimizer update
+      * scheduler.step() once per epoch, never per micro-batch
+    Returns (avg_loss, avg_cce, optimizer_updates).
+    """
     losses_seg = AverageMeter()
     losses_cce = AverageMeter()
     dices_m = AverageMeter()
@@ -360,7 +381,12 @@ def train_epoch(current_epoch, seg_loss, ce_loss, model, optimizer, scheduler,
     if is_main():
         iterator = tqdm(train_loader, desc=f'Epoch {current_epoch}')
 
-    for sample in iterator:
+    n_batches = len(train_loader)
+    optimizer_updates = 0
+    accum_count = 0
+    optimizer.zero_grad()  # start the first accumulation cycle with zero grads
+
+    for bi, sample in enumerate(iterator):
         imgs = sample["img"].cuda(non_blocking=True)
         msks = sample["msk"].cuda(non_blocking=True)
         lbl_msk = sample["lbl_msk"].cuda(non_blocking=True)
@@ -375,6 +401,10 @@ def train_epoch(current_epoch, seg_loss, ce_loss, model, optimizer, scheduler,
         loss = (0.1 * loss0 + 0.1 * loss1 + 0.1 * loss2 + 0.6 * loss3 +
                 0.1 * loss4 + 11 * loss5)
 
+        # scale so the accumulated gradient == effective batch semantics
+        (loss / grad_accum).backward()
+        accum_count += 1
+
         with torch.no_grad():
             probs = 1 - torch.sigmoid(out[:, 0, ...])
             dice_sc = 1 - dice_round(probs, 1 - msks[:, 0, ...])
@@ -383,23 +413,31 @@ def train_epoch(current_epoch, seg_loss, ce_loss, model, optimizer, scheduler,
         losses_cce.update(loss5.item(), imgs.size(0))
         dices_m.update(dice_sc, imgs.size(0))
 
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.999)
-        optimizer.step()
+        is_last = (bi == n_batches - 1)
+        if accum_count % grad_accum == 0 or is_last:
+            # clip + step only when the cycle is complete (or on the tail)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.999)
+            optimizer.step()
+            optimizer.zero_grad()   # zero only after an optimizer update
+            optimizer_updates += 1
+            accum_count = 0
 
         if is_main() and hasattr(iterator, 'set_description'):
             iterator.set_description(
                 f"epoch: {current_epoch}; lr {scheduler.get_last_lr()[-1]:.7f}; "
                 f"Loss {losses_seg.val:.4f} ({losses_seg.avg:.4f}); "
                 f"CCE {losses_cce.val:.4f} ({losses_cce.avg:.4f}); "
-                f"Dice {dices_m.val:.4f} ({dices_m.avg:.4f})")
+                f"Dice {dices_m.val:.4f} ({dices_m.avg:.4f}); "
+                f"upd {optimizer_updates}")
 
-    scheduler.step()
+    scheduler.step()  # once per epoch — never per micro-batch
     dprint(f"epoch: {current_epoch}; lr {scheduler.get_last_lr()[-1]:.7f}; "
            f"Loss {losses_seg.avg:.4f}; CCE {losses_cce.avg:.4f}; "
-           f"Dice {dices_m.avg:.4f}")
-    return losses_seg.avg, losses_cce.avg
+           f"Dice {dices_m.avg:.4f}; micro_batches {n_batches}; "
+           f"optimizer_updates {optimizer_updates}; "
+           f"accum {grad_accum}; "
+           f"eff_bs {PHYSICAL_BATCH * world_size * grad_accum}")
+    return losses_seg.avg, losses_cce.avg, optimizer_updates
 
 
 # ── Main ──────────────────────────────────────────────────────────────
@@ -453,13 +491,13 @@ if __name__ == '__main__':
 
     train_sampler = DistributedSampler(data_train, num_replicas=world_size, rank=rank,
                                         shuffle=True, seed=seed)
-    batch_size = 4
+    batch_size = PHYSICAL_BATCH
     # Validation runs FP32 at full 1024x1024: the GFM bmm tensors
     # ((B, h*w, h*w)) need ~4 GiB per batch element at 128x128 feature maps,
     # so bs=4 OOMs on 24 GB (the legacy run used AMP, which halved this).
     # Measured peak with bs=1: 4.4 GiB. Batch size does not change the
     # metric values (per-image accumulation), only memory.
-    val_batch_size = 1
+    val_batch_size = VAL_BATCH
 
     train_loader = DataLoader(data_train, batch_size=batch_size, sampler=train_sampler,
                                num_workers=4, pin_memory=True, drop_last=True)
@@ -492,27 +530,35 @@ if __name__ == '__main__':
             f"experiments/stage1_fixdata_eval/ckpt/ (sha256 "
             f"cd9409890d146fcc020c5448fd533cccec4a9a2ea157542b43890cabbeed01ed).")
 
-    optimizer = AdamW(model.parameters(), lr=0.0002, weight_decay=1e-6)
+    optimizer = AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     # FP32 full precision (no AMP — stable for DDP training)
     model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[3, 9], gamma=0.5)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=MILESTONES, gamma=GAMMA)
 
     seg_loss = ComboLoss({'dice': 0.5, 'focal': 8.0}, per_image=False).cuda()
     ce_loss = nn.CrossEntropyLoss().cuda()
 
     # ── Training loop ──
     best_score = 0.0
-    total_epochs = 30
+    total_epochs = TOTAL_EPOCHS
     snapshot_name = f'GFformer_cls_{seed}_{EXP_NAME}'
 
+    dprint(f'[protocol] GPU=1xRTX4090 crop={INPUT_SHAPE} epochs={total_epochs} '
+           f'lr={LR} physical_batch={batch_size} grad_accum={GRAD_ACCUM_STEPS} '
+           f'eff_batch={batch_size * world_size * GRAD_ACCUM_STEPS} '
+           f'optimizer=AdamW(wd={WEIGHT_DECAY}) '
+           f'scheduler=MultiStepLR{MILESTONES},gamma={GAMMA} '
+           f'AMP={AMP_ENABLED} val_batch={val_batch_size}')
     dprint(f'Starting Stage 2 training: {total_epochs} epochs, '
-           f'eff_BS={batch_size * world_size}')
+           f'physical_BS={batch_size}, accum={GRAD_ACCUM_STEPS}, '
+           f'eff_BS={batch_size * world_size * GRAD_ACCUM_STEPS}')
     torch.cuda.empty_cache()
 
     for epoch in range(total_epochs):
-        ls, lc = train_epoch(epoch, seg_loss, ce_loss, model, optimizer, scheduler,
-                             train_loader, train_sampler)
+        ls, lc, _ = train_epoch(epoch, seg_loss, ce_loss, model, optimizer, scheduler,
+                                train_loader, train_sampler,
+                                grad_accum=GRAD_ACCUM_STEPS, world_size=world_size)
         if epoch % 2 == 0:
             torch.cuda.empty_cache()
             best_score = evaluate_val(val_loader, best_score, model, snapshot_name, epoch)
