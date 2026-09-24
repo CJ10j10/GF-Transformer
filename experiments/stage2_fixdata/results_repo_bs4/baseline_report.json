@@ -1,0 +1,46 @@
+{
+  "checkpoint": "experiments/stage2_fixdata/ckpt_repo_bs4/GFformer_cls_3_fixdata_best14",
+  "checkpoint_sha256": "19523418fe2e149d44ab83a3c5e1fcfc95a6b554bc04d130e350d111a44d650d",
+  "frozen_baseline_metrics": {
+    "F1_0": 0.9379,
+    "F1_1": 0.4917,
+    "F1_2": 0.7015,
+    "F1_3": 0.8122,
+    "F1b": 0.872,
+    "F1d": 0.6949,
+    "F1s": 0.748
+  },
+  "frozen_baseline_protocol": "single_view",
+  "localization_masks": "experiments/stage1_fixdata_eval/loc_masks",
+  "metric_code": "train_segformer_cls.validate",
+  "single_view": {
+    "F1_0": 0.9379,
+    "F1_1": 0.4917,
+    "F1_2": 0.7015,
+    "F1_3": 0.8122,
+    "F1b": 0.872,
+    "F1d": 0.6949,
+    "F1s": 0.748
+  },
+  "tta4": {
+    "F1_0": 0.9399,
+    "F1_1": 0.4834,
+    "F1_2": 0.698,
+    "F1_3": 0.8144,
+    "F1b": 0.872,
+    "F1d": 0.6905,
+    "F1s": 0.745
+  },
+  "tta_absolute_delta": {
+    "F1_0": 0.002,
+    "F1_1": -0.0083,
+    "F1_2": -0.0035,
+    "F1_3": 0.0022,
+    "F1b": 0.0,
+    "F1d": -0.0044,
+    "F1s": -0.003
+  },
+  "tta_effective": false,
+  "validation_images": 917,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e"
+}
