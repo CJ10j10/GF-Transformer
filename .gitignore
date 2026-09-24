@@ -42,3 +42,5 @@ experiments/stage2_fixdata/ckpt_repo_bs4/
 # K2 formal training artifacts
 experiments/stage2_k2_kalman_refine/ckpt/
 experiments/stage2_k2_kalman_refine/current_k2_log.txt
+experiments/stage2_k2_kalman_refine/ckpt_ddp2/
+experiments/stage2_k2_kalman_refine/current_k2_ddp2_log.txt

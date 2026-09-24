@@ -1,0 +1,214 @@
+{
+  "ready_for_training": true,
+  "world_size": 2,
+  "per_gpu_batch": 2,
+  "grad_accum": 1,
+  "global_batch": 4,
+  "train_images_oversampled": 13407,
+  "full_epoch_updates_per_rank": 3351,
+  "fixed_validation_images": 917,
+  "validation_protocol": "single-view, rank0 only, batch1",
+  "validation_sample_score": 0.269581191674733,
+  "validation_sample_seconds": 1.9967240309999852,
+  "baseline_equivalence_max_abs_diff": 0.0,
+  "base_initialization_equal": true,
+  "single_gpu_reference_audit": "/workspace/GF-Transformer/experiments/stage2_k2_kalman_refine/audit/preflight.json",
+  "stage1_checkpoint": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/ckpt/GFformer_loc_fixdata_ep57_valdice0.8830_sha_cd940989.pt",
+  "localization_masks": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/loc_masks",
+  "checkpoint_dir": "/workspace/GF-Transformer/experiments/stage2_k2_kalman_refine/ckpt_ddp2",
+  "formal_epochs": 50,
+  "lr": 0.0002,
+  "weight_decay": 1e-06,
+  "scheduler_milestones": [
+    3,
+    9
+  ],
+  "scheduler_gamma": 0.5,
+  "crop": [
+    512,
+    512
+  ],
+  "amp": false,
+  "ranks": [
+    {
+      "rank": 0,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "updates": 24,
+      "loss": 3.043221748123566,
+      "cross_entropy": 0.19699583624924344,
+      "train_elapsed_seconds": 10.444574711999962,
+      "train_peak_allocated_gib": 11.207369327545166,
+      "train_peak_reserved_gib": 16.806640625,
+      "iteration_time_mean_seconds": 0.4330464232916711,
+      "iteration_time_median_steady_seconds": 0.31880562900005316,
+      "gamma_after_smoke": {
+        "K1": 0.00022998815984465182,
+        "K2": -0.0014022476971149445,
+        "K3": 0.00044765451457351446
+      },
+      "first_three_gradient_max_abs": [
+        {
+          "step": 1,
+          "branches": {
+            "K1": {
+              "gamma": 2.8649115847656503e-05,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            },
+            "K2": {
+              "gamma": 3.08664639305789e-05,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            },
+            "K3": {
+              "gamma": 5.049208695595553e-08,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            }
+          }
+        },
+        {
+          "step": 2,
+          "branches": {
+            "K1": {
+              "gamma": 2.6096966365685148e-08,
+              "obs": 6.046057543507288e-10,
+              "P": 5.988094048392512e-11,
+              "R": 5.7311703993701e-11
+            },
+            "K2": {
+              "gamma": 1.6387118648708565e-06,
+              "obs": 3.7905165117813056e-10,
+              "P": 5.948219000684318e-11,
+              "R": 3.9787735606200414e-11
+            },
+            "K3": {
+              "gamma": 4.909377082640276e-08,
+              "obs": 1.243184288152177e-11,
+              "P": 1.640321884398277e-12,
+              "R": 1.490093747176513e-12
+            }
+          }
+        },
+        {
+          "step": 3,
+          "branches": {
+            "K1": {
+              "gamma": 2.6446070933161536e-07,
+              "obs": 7.027907145129575e-10,
+              "P": 1.4331420772339953e-10,
+              "R": 6.42594311095479e-11
+            },
+            "K2": {
+              "gamma": 2.3468367089662934e-06,
+              "obs": 9.50568401769658e-10,
+              "P": 3.252825786503877e-10,
+              "R": 1.1663228716152219e-10
+            },
+            "K3": {
+              "gamma": 8.147412522419017e-09,
+              "obs": 3.445216768122039e-12,
+              "P": 6.238065619612598e-13,
+              "R": 1.4586130968417127e-13
+            }
+          }
+        }
+      ],
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0
+    },
+    {
+      "rank": 1,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "updates": 24,
+      "loss": 2.5070805388192334,
+      "cross_entropy": 0.1511296944754008,
+      "train_elapsed_seconds": 10.505074255999943,
+      "train_peak_allocated_gib": 11.207369327545166,
+      "train_peak_reserved_gib": 16.79296875,
+      "iteration_time_mean_seconds": 0.4347504029166724,
+      "iteration_time_median_steady_seconds": 0.3173308689999885,
+      "gamma_after_smoke": {
+        "K1": 0.00022998815984465182,
+        "K2": -0.0014022476971149445,
+        "K3": 0.00044765451457351446
+      },
+      "first_three_gradient_max_abs": [
+        {
+          "step": 1,
+          "branches": {
+            "K1": {
+              "gamma": 2.8649115847656503e-05,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            },
+            "K2": {
+              "gamma": 3.08664639305789e-05,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            },
+            "K3": {
+              "gamma": 5.049208695595553e-08,
+              "obs": 0.0,
+              "P": 0.0,
+              "R": 0.0
+            }
+          }
+        },
+        {
+          "step": 2,
+          "branches": {
+            "K1": {
+              "gamma": 2.6096966365685148e-08,
+              "obs": 6.046057543507288e-10,
+              "P": 5.988094048392512e-11,
+              "R": 5.7311703993701e-11
+            },
+            "K2": {
+              "gamma": 1.6387118648708565e-06,
+              "obs": 3.7905165117813056e-10,
+              "P": 5.948219000684318e-11,
+              "R": 3.9787735606200414e-11
+            },
+            "K3": {
+              "gamma": 4.909377082640276e-08,
+              "obs": 1.243184288152177e-11,
+              "P": 1.640321884398277e-12,
+              "R": 1.490093747176513e-12
+            }
+          }
+        },
+        {
+          "step": 3,
+          "branches": {
+            "K1": {
+              "gamma": 2.6446070933161536e-07,
+              "obs": 7.027907145129575e-10,
+              "P": 1.4331420772339953e-10,
+              "R": 6.42594311095479e-11
+            },
+            "K2": {
+              "gamma": 2.3468367089662934e-06,
+              "obs": 9.50568401769658e-10,
+              "P": 3.252825786503877e-10,
+              "R": 1.1663228716152219e-10
+            },
+            "K3": {
+              "gamma": 8.147412522419017e-09,
+              "obs": 3.445216768122039e-12,
+              "P": 6.238065619612598e-13,
+              "R": 1.4586130968417127e-13
+            }
+          }
+        }
+      ],
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0
+    }
+  ]
+}
