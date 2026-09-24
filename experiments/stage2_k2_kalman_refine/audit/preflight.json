@@ -1,0 +1,266 @@
+{
+  "ready_for_training": true,
+  "baseline_checkpoint": "/workspace/GF-Transformer/experiments/stage2_fixdata/ckpt_repo_bs4/GFformer_cls_3_fixdata_best14",
+  "stage1_checkpoint": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/ckpt/GFformer_loc_fixdata_ep57_valdice0.8830_sha_cd940989.pt",
+  "localization_masks": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/loc_masks",
+  "iterations": 24,
+  "protocol": {
+    "batch": 4,
+    "grad_accum": 1,
+    "epochs": 50,
+    "optimizer": "AdamW",
+    "lr": 0.0002,
+    "weight_decay": 1e-06,
+    "scheduler_milestones": [
+      3,
+      9
+    ],
+    "scheduler_gamma": 0.5,
+    "crop": [
+      512,
+      512
+    ],
+    "amp": false,
+    "val_batch": 1,
+    "eval": "single-view"
+  },
+  "baseline_parameters": 56517168,
+  "k2_parameters": 57326963,
+  "added_parameters": 809795,
+  "validation_images": 917,
+  "max_abs_diff": 0.0,
+  "insertion_shapes": {
+    "GF1": {
+      "pre": [
+        1,
+        64,
+        128,
+        128
+      ],
+      "post": [
+        1,
+        64,
+        128,
+        128
+      ],
+      "global": [
+        1,
+        128,
+        128,
+        128
+      ]
+    },
+    "CSGF1": {
+      "pre": [
+        1,
+        64,
+        128,
+        128
+      ],
+      "post": [
+        1,
+        64,
+        128,
+        128
+      ],
+      "global": [
+        1,
+        128,
+        128,
+        128
+      ]
+    },
+    "GF2": {
+      "pre": [
+        1,
+        128,
+        64,
+        64
+      ],
+      "post": [
+        1,
+        128,
+        64,
+        64
+      ],
+      "global": [
+        1,
+        320,
+        64,
+        64
+      ]
+    },
+    "CSGF2": {
+      "pre": [
+        1,
+        128,
+        64,
+        64
+      ],
+      "post": [
+        1,
+        128,
+        64,
+        64
+      ],
+      "global": [
+        1,
+        320,
+        64,
+        64
+      ]
+    },
+    "GF3": {
+      "pre": [
+        1,
+        320,
+        32,
+        32
+      ],
+      "post": [
+        1,
+        320,
+        32,
+        32
+      ],
+      "global": [
+        1,
+        512,
+        32,
+        32
+      ]
+    },
+    "CSGF3": {
+      "pre": [
+        1,
+        320,
+        32,
+        32
+      ],
+      "post": [
+        1,
+        320,
+        32,
+        32
+      ],
+      "global": [
+        1,
+        512,
+        32,
+        32
+      ]
+    }
+  },
+  "kalman_k": {
+    "K1": {
+      "min": 0.06056074798107147,
+      "max": 0.8348677754402161,
+      "mean": 0.5088827610015869,
+      "std": 0.07868500798940659
+    },
+    "K2": {
+      "min": 0.016039174050092697,
+      "max": 0.9138901829719543,
+      "mean": 0.4982040822505951,
+      "std": 0.08614637702703476
+    },
+    "K3": {
+      "min": 0.032062601298093796,
+      "max": 0.8452005982398987,
+      "mean": 0.5009892582893372,
+      "std": 0.05748499929904938
+    }
+  },
+  "base_initialization_equal": true,
+  "stage1_encoder_coverage": 1.0,
+  "backbone_trainable_tensors": 572,
+  "gamma_initial": {
+    "K1": 0.0,
+    "K2": 0.0,
+    "K3": 0.0
+  },
+  "optimizer_updates": 24,
+  "loss": 2.7882024124264717,
+  "cross_entropy": 0.1749436070288842,
+  "peak_allocated_gib": 14.01387643814087,
+  "peak_reserved_gib": 14.4296875,
+  "smoke_elapsed_seconds": 12.482230913999956,
+  "iteration_time_mean_seconds": 0.5374265187916384,
+  "iteration_time_median_seconds": 0.45352742349996333,
+  "first_three_gradient_max_abs": [
+    {
+      "step": 1,
+      "branches": {
+        "K1": {
+          "gamma": 8.47491992317373e-06,
+          "obs": 0.0,
+          "P": 0.0,
+          "R": 0.0
+        },
+        "K2": {
+          "gamma": 2.193326736232848e-06,
+          "obs": 0.0,
+          "P": 0.0,
+          "R": 0.0
+        },
+        "K3": {
+          "gamma": 9.884961826855942e-08,
+          "obs": 0.0,
+          "P": 0.0,
+          "R": 0.0
+        }
+      }
+    },
+    {
+      "step": 2,
+      "branches": {
+        "K1": {
+          "gamma": 3.862206995108863e-06,
+          "obs": 4.644399309583491e-10,
+          "P": 5.733600053070553e-11,
+          "R": 4.032396985764741e-11
+        },
+        "K2": {
+          "gamma": 2.3297725419979542e-06,
+          "obs": 1.3476444959970024e-10,
+          "P": 3.293479031163393e-11,
+          "R": 1.3727820095954524e-11
+        },
+        "K3": {
+          "gamma": 2.2258866749780282e-07,
+          "obs": 1.2392376014247475e-10,
+          "P": 1.6666022728539787e-11,
+          "R": 2.289613984518546e-11
+        }
+      }
+    },
+    {
+      "step": 3,
+      "branches": {
+        "K1": {
+          "gamma": 8.483637543577061e-07,
+          "obs": 9.272200784948836e-10,
+          "P": 1.357755852193776e-10,
+          "R": 7.826946729627693e-11
+        },
+        "K2": {
+          "gamma": 2.4074568045762135e-06,
+          "obs": 1.2105319524557956e-10,
+          "P": 4.035943107494333e-11,
+          "R": 1.7020895110020362e-11
+        },
+        "K3": {
+          "gamma": 7.849254757275048e-08,
+          "obs": 1.8814567959157813e-11,
+          "P": 5.925373473131268e-12,
+          "R": 1.0217949533361526e-12
+        }
+      }
+    }
+  ],
+  "gamma_after_smoke": {
+    "K1": -0.001945581752806902,
+    "K2": -0.001829071668908,
+    "K3": 0.0014395542675629258
+  }
+}
