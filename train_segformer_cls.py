@@ -1,4 +1,4 @@
-"""Stage 2: Damage Classification with GFformer_two — 4-GPU DDP version."""
+"""Stage 2: Damage Classification with GFformer_two."""
 
 import os
 import sys
@@ -42,7 +42,7 @@ TRAIN_DIRS = [os.path.join(DATA_BASE, 'train'), os.path.join(DATA_BASE, 'tier3')
 # the legacy tune_weight/ files, the smoke checkpoints (ckpt_smoke/), or
 # any previous Stage-2 run.
 EXP_DIR = os.path.join(BASE_DIR, 'experiments', 'stage2_fixdata')
-MODELS_FOLDER = os.path.join(EXP_DIR, 'ckpt_baseline')
+MODELS_FOLDER = os.path.join(EXP_DIR, 'ckpt_repo_bs4')
 # Localization masks generated from the verified Stage-1 checkpoint
 # (inference_loc.py writes here).
 LOC_FOLDER = os.path.join(BASE_DIR, 'experiments', 'stage1_fixdata_eval', 'loc_masks')
@@ -51,15 +51,15 @@ EXP_NAME = 'fixdata'
 os.makedirs(MODELS_FOLDER, exist_ok=True)
 os.makedirs(LOC_FOLDER, exist_ok=True)
 
-# ── Training protocol (repo-aligned baseline, single-GPU effective batch 32) ──
+# ── Training protocol (Baseline-B, single GPU) ──
 PHYSICAL_BATCH = 4                    # batch per GPU
 VAL_BATCH = 1                         # FP32 full-res 1024x1024 validation
-GRAD_ACCUM_STEPS = int(os.environ.get('GF_GRAD_ACCUM', '8'))  # eff batch = 4 * 1 * 8 = 32
+GRAD_ACCUM_STEPS = 1                   # effective batch = 4 * 1 * 1 = 4
 LR = 2e-4
 WEIGHT_DECAY = 1e-6                   # repo-aligned AdamW (≈ Adam)
 MILESTONES = [3, 9]
 GAMMA = 0.5
-TOTAL_EPOCHS = 30
+TOTAL_EPOCHS = 50
 AMP_ENABLED = False                   # FP32 full precision
 
 # ── DDP helpers ───────────────────────────────────────────────────────
@@ -447,6 +447,10 @@ if __name__ == '__main__':
     dist.init_process_group(backend='nccl')
     rank = dist.get_rank()
     world_size = dist.get_world_size()
+    if world_size != 1:
+        raise RuntimeError(f'Baseline-B requires one GPU; got world_size={world_size}')
+    if os.listdir(MODELS_FOLDER):
+        raise RuntimeError(f'Baseline-B checkpoint directory must be empty: {MODELS_FOLDER}')
 
     dprint(f'DDP: rank={rank}/{world_size}, GPU={torch.cuda.get_device_name(local_rank)}')
 

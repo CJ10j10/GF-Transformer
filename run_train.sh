@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================================================
-# GF-Transformer Training — Launcher for 4× RTX 4090 DDP
+# GF-Transformer Training — Stage 1 DDP and Stage 2 Baseline-B
 # ===========================================================================
 # Usage:
 #   bash run_train.sh              # Run both stages
@@ -45,16 +45,15 @@ fi
 if [[ "$STAGE" == "all" ]] || [[ "$STAGE" == "cls" ]]; then
     echo "============================================================================"
     echo " STAGE 2: Damage Classification (GFformer_two)"
-    echo " 30 epochs | per-GPU BS=4 | eff BS=16 | requires fixdata Stage 1 + loc masks"
+    echo " 50 epochs | 1 GPU | BS=4 | accum=1 | requires fixdata Stage 1 + loc masks"
     echo "============================================================================"
-    torchrun --nproc_per_node=$NUM_GPUS --master_port=$MASTER_PORT \
-        train_segformer_cls.py 2>&1 | tee -a logs/stage2_cls_fixdata.log
+    bash experiments/stage2_fixdata/run_repo_bs4.sh
     echo "Stage 2 done."
 fi
 
 echo "============================================================================"
 echo " TRAINING COMPLETE"
-echo " Checkpoints: tune_weight/"
+echo " Stage 2 checkpoints: experiments/stage2_fixdata/ckpt_repo_bs4/"
 echo " Logs:        logs/"
 echo " TensorBoard: runs/"
 echo "============================================================================"

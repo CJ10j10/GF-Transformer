@@ -26,6 +26,7 @@ experiments/stage1_fixdata_eval/ckpt/
 experiments/stage1_fixdata_eval/loc_masks/
 experiments/stage2_fixdata/ckpt_baseline/
 experiments/stage2_fixdata/ckpt_smoke/
+experiments/stage2_fixdata/ckpt_repo_bs4/
 
 # Archives
 *.zip
