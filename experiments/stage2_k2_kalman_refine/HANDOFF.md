@@ -74,6 +74,8 @@ refined = global_feat + gamma * K * z
 
 独立重评估由 [eval_k2_ddp2.py](eval_k2_ddp2.py) 调用原 `train_segformer_cls.validate` 完成，结果见 [ddp2_single_view.json](results/ddp2_single_view.json)：
 
+逐次验证曲线已从原始 tqdm 日志提取为小型 [K2 CSV](results/ddp2_validation_history.csv) 和 [Baseline-B CSV](results/baseline_b_validation_history.csv)，各 25 行；提取脚本为 [summarize_validation_history.py](summarize_validation_history.py)。原始大日志不纳入本轮提交。
+
 | 指标 | Baseline-B（1 GPU） | K2 best（2 GPU） | K2 − B0 |
 | --- | ---: | ---: | ---: |
 | F1b | 0.8720 | 0.8720 | 0.0000 |
