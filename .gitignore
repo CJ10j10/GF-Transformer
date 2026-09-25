@@ -44,3 +44,7 @@ experiments/stage2_k2_kalman_refine/ckpt/
 experiments/stage2_k2_kalman_refine/current_k2_log.txt
 experiments/stage2_k2_kalman_refine/ckpt_ddp2/
 experiments/stage2_k2_kalman_refine/current_k2_ddp2_log.txt
+
+# Matched B0 two-GPU control artifacts
+experiments/stage2_b0_ddp2/ckpt/
+experiments/stage2_b0_ddp2/current_log.txt
