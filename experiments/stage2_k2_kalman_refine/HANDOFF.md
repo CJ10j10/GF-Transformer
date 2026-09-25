@@ -1,15 +1,15 @@
 # GF-Transformer / K2 交接记录
 
-更新：2026-09-24 13:54 UTC。项目目录：`/workspace/GF-Transformer`。以下“当前进度”是写文档时的快照，后续以实时日志为准。
+更新：2026-09-25。项目目录：`/workspace/GF-Transformer`。双卡 K2 已完整训练并完成独立 single-view 重评估。
 
 ## 当前状态与分支
 
 - 稳定 Baseline-B 分支：`fix/stage1-ckpt-isolation`，最后相关提交 `c566247`。
 - K2 单卡准备：`exp/k2-gf-kalman-refine`，提交 `60403ca`。
-- **正在使用的双卡 K2 分支**：`exp/k2-gf-kalman-refine-ddp2`；训练代码提交 `2031786`。训练由用户在 tmux 会话 `k2_ddp2` 中手动启动，切断 SSH 不会终止 tmux 内进程。
-- 当前日志路径记录在 `current_k2_ddp2_log.txt`，本次为 `logs/stage2_k2_ddp2_20260924_133257.log`。
-- 写文档时 epoch 0 已完成 3,351 次更新及全部 917 张验证，epoch 1 已开始。首次验证：F1b/建筑 Dice `0.8720`、F1d `0.3835`、F1s `0.5300`，minor F1 `0.1573`。这是**第一个 epoch 的中间结果，不是最终 K2 指标**。
-- 首个 checkpoint 已生成于 `ckpt_ddp2/GFformer_cls_3_k2_ddp2_best14`。训练入口拒绝非空 checkpoint 目录，**不要在当前训练未结束时再次执行启动脚本**。
+- **双卡 K2 分支**：`exp/k2-gf-kalman-refine-ddp2`；训练代码提交 `2031786`。用户在 tmux 会话 `k2_ddp2` 中手动启动，50 epochs 已完整结束。
+- 正式日志路径记录在 `current_k2_ddp2_log.txt`，本次为 `logs/stage2_k2_ddp2_20260924_133257.log`；torchrun 于 2026-09-25 04:00 UTC 正常退出，耗时 `14.45 h`。
+- 最佳 checkpoint：`ckpt_ddp2/GFformer_cls_3_k2_ddp2_best14`（记录 epoch `27`，对应完成第 0-based epoch `26` 后的验证），SHA256 `8238addd6d0845515e6a893c5ae73c0bed93f7ffb3569a67b6e2488eb47f360a`。不要覆盖或从这个 best 权重继续启动新的正式实验。
+- [独立 917 张 single-view 结果](results/ddp2_single_view.json)精确复现 checkpoint best score：`0.74992773` 对 `0.74992861`；split、localization 目录和 metric 代码哈希均与 Baseline-B 一致。
 
 ## 可信的前置复现
 
@@ -68,6 +68,24 @@ refined = global_feat + gamma * K * z
 
 双卡短测稳态约 `0.319 秒/更新`；按每 epoch `3,351` 次更新与 Baseline-B 约 `51` 分钟的总验证耗时推算，中心估计约 `15.7` 小时，实际可按 `15–18` 小时规划。双卡通信、数据读取和 24 步样本的局限使这个值不是保证值。虽然全局 batch 与更新数一致，每卡 BatchNorm 统计量不同，双卡 K2 与单卡 Baseline-B 的训练轨迹不会逐项相同。
 
+## 双卡 K2 正式结果与 Baseline-B 比较
+
+训练日志包含完整 50 epochs、每 epoch 3,351 次 optimizer 更新及 25 次完整 validation；无 Traceback、OOM 或非有限值。训练平均 loss 从 epoch 0 的 `1.3986` 降至 epoch 49 的 `0.4813`。best 在 epoch 26 后出现，最后一次验证（epoch 48 后）F1s 为 `0.7403`，低于 best `0.7499`；正式比较使用预先固定的 best checkpoint 规则。
+
+独立重评估由 [eval_k2_ddp2.py](eval_k2_ddp2.py) 调用原 `train_segformer_cls.validate` 完成，结果见 [ddp2_single_view.json](results/ddp2_single_view.json)：
+
+| 指标 | Baseline-B（1 GPU） | K2 best（2 GPU） | K2 − B0 |
+| --- | ---: | ---: | ---: |
+| F1b | 0.8720 | 0.8720 | 0.0000 |
+| F1d | 0.6949 | 0.6976 | +0.0027 |
+| F1s | 0.7480 | 0.7499 | +0.0019 |
+| F1_0 | 0.9379 | 0.9406 | +0.0027 |
+| F1_1（minor） | 0.4917 | 0.5024 | +0.0107 |
+| F1_2（moderate） | 0.7015 | 0.6840 | −0.0175 |
+| F1_3 | 0.8122 | 0.8206 | +0.0084 |
+
+结论限于这一次固定验证集上的**小幅数值改善**：minor 增加 1.07 个百分点，整体 F1s 增加 0.19 个百分点，moderate 下降 1.75 个百分点。B0 为单卡训练、K2 为双卡训练，BatchNorm 的本地统计量不同；不能仅凭这一次比较把小幅差值归因于 KalmanRefine，也尚未评估随机种子敏感性。
+
 ## 遇到的问题及处理
 
 | 问题 | 处理 / 结论 |
@@ -83,14 +101,14 @@ refined = global_feat + gamma * K * z
 | VS Code/Codex 在非 Git 大目录搜索导致 CPU 高 | 只打开 `/workspace` 后 CPU 恢复；与训练计算无关 |
 | 终端缺少 `rg` | 查询命令使用系统自带 `grep`；空 checkpoint 在 epoch 0 首次验证结束前属正常现象 |
 
-## 监控正在运行的训练
+## 查看已完成的训练日志
 
 在新终端执行（每个新 shell 都要重新读取 `LOG`）：
 
 ```bash
 cd /workspace/GF-Transformer
 LOG=$(cat experiments/stage2_k2_kalman_refine/current_k2_ddp2_log.txt)
-tail -f "$LOG"
+tail -n 50 "$LOG"
 ```
 
 查看已经完成的验证和 best score：
@@ -100,10 +118,10 @@ tr '\r' '\n' < "$LOG" | grep -E 'Val Score:|score_best:|K2 DDP2 done' | tail -n 
 ls -lh experiments/stage2_k2_kalman_refine/ckpt_ddp2/
 ```
 
-查看 tmux：`tmux ls`；重新进入：`tmux attach -t k2_ddp2`；暂时离开：按 `Ctrl-b` 后按 `d`。日志文件中进度条使用回车符，故查询历史时先用 `tr '\r' '\n'` 展开。
+若 tmux 会话仍保留，可用 `tmux ls` 查看、`tmux attach -t k2_ddp2` 进入。日志文件中进度条使用回车符，故查询历史时先用 `tr '\r' '\n'` 展开。
 
-## 训练结束后的待办
+## 下一步建议
 
-1. 确认 `K2 DDP2 done`、50 个 epoch 完成、best checkpoint 存在；记录 checkpoint SHA256、最佳 epoch、日志时间与最终耗时。
-2. 用**同一固定 917 validation split、同一 localization masks、原 `train_segformer_cls.validate`、single-view** 对 best checkpoint 独立重评估，冻结 F1b/F1d/F1s 和 F1_0–F1_3，再与 Baseline-B 比较。当前没有为 K2 best checkpoint 编写独立的完整重评估脚本；不要把一张验证图的 smoke 分数当正式结果。
-3. 重点观察 minor F1 `0.4917` 基线，同时报告整体 F1s。若后续研究 `post−GF`，将其作为独立 **K2b** 实验，不能覆盖本次 K2 权重、日志或结果。
+1. 先做配对的逐图统计或 bootstrap，判断同一 917 张验证集上的微小 F1s 增益与 minor 增益是否稳定；仍应保留目前冻结的 checkpoint、单视角协议和全部类别指标。
+2. 若目标是将差异归因于模型结构，用相同的双卡 `2×2`、seed、sampler、更新数及验证协议重训 B0 对照；当前单卡 B0 与双卡 K2 的 BatchNorm 统计量不同。若准备发表结论，再考虑多个随机种子或独立测试集。
+3. `post−GF` 的 canonical prior-observation update 应作为独立 **K2b** 分支、输出目录和预检，不能覆盖本次 damage-change guided K2。
