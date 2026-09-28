@@ -50,5 +50,6 @@ experiments/stage2_b0_ddp2/ckpt/
 experiments/stage2_b0_ddp2/current_log.txt
 
 # Matched-seed screening outputs
+!experiments/stage2_matched_seeds/runs/
 experiments/stage2_matched_seeds/runs/*/ckpt/
 experiments/stage2_matched_seeds/runs/*/current_log.txt

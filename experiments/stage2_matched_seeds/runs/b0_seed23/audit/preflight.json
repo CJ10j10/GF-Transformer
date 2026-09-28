@@ -1,0 +1,63 @@
+{
+  "ready_for_training": true,
+  "variant": "b0",
+  "train_seed": 23,
+  "validation_split_seed": 3,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
+  "validation_mask_manifest_sha256": "37e841011b556f48e6158f6feb5df9efccbe854bdc0843c5be49e69d6e3b6f55",
+  "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "world_size": 2,
+  "per_gpu_batch": 2,
+  "grad_accum": 1,
+  "global_batch": 4,
+  "updates_per_full_epoch": 3351,
+  "smoke_updates_per_rank": 20,
+  "validation_images": 917,
+  "validation_sample_score": 0.2695811916875226,
+  "shared_b0_k2_base_initialization_equal": true,
+  "formal_epochs": 50,
+  "lr": 0.0002,
+  "weight_decay": 1e-06,
+  "scheduler_milestones": [
+    3,
+    9
+  ],
+  "scheduler_gamma": 0.5,
+  "crop": [
+    512,
+    512
+  ],
+  "amp": false,
+  "stage1_checkpoint": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/ckpt/GFformer_loc_fixdata_ep57_valdice0.8830_sha_cd940989.pt",
+  "checkpoint_dir": "/workspace/GF-Transformer/experiments/stage2_matched_seeds/runs/b0_seed23/ckpt",
+  "ranks": [
+    {
+      "rank": 0,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "updates": 20,
+      "loss": 22.08688850402832,
+      "cross_entropy": 1.8516743898391723,
+      "train_elapsed_seconds": 10.030764351000016,
+      "peak_allocated_gib": 10.880280017852783,
+      "peak_reserved_gib": 19.60546875,
+      "median_steady_step_seconds": 0.368990961000236,
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0,
+      "gamma_after_smoke": null
+    },
+    {
+      "rank": 1,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "updates": 20,
+      "loss": 19.276269340515135,
+      "cross_entropy": 1.6161553859710693,
+      "train_elapsed_seconds": 10.015482687999793,
+      "peak_allocated_gib": 10.880280017852783,
+      "peak_reserved_gib": 19.609375,
+      "median_steady_step_seconds": 0.38454666999996334,
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0,
+      "gamma_after_smoke": null
+    }
+  ]
+}
