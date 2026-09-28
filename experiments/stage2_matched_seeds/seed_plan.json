@@ -1,0 +1,18 @@
+{
+  "status": "preregistered_before_seed11_or_seed23_formal_training",
+  "validation_split_seed": 3,
+  "validation_images": 917,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
+  "train_seeds_for_all_variants": [3, 11, 23],
+  "already_completed_seed": 3,
+  "new_matched_seed_screening": [11, 23],
+  "variants_in_screening": ["b0", "k2"],
+  "future_variants_using_same_seed_set": ["k1", "k2b", "k3"],
+  "seed_rule": "At each run, seed Python random, NumPy and PyTorch with train_seed + rank; DistributedSampler uses train_seed; validation split remains fixed at seed 3.",
+  "selection_rule": "Within each run, select the highest unrounded single-view F1s among validation checks at epochs 1,3,...,49 (1-based).",
+  "primary_comparison": "For each seed compare K2 minus B0 best-checkpoint F1s on the same 917 validation images; report all three seed-pair deltas without excluding runs.",
+  "minor_damage_endpoint": "F1_1, reported for all runs; do not select checkpoints by this endpoint.",
+  "existing_seed3_b0_checkpoint_sha256": "3c10b6f1ea807ee77dddc11743bbf73e471ab6ad8a2473fc424116721f8a1193",
+  "existing_seed3_k2_checkpoint_sha256": "8238addd6d0845515e6a893c5ae73c0bed93f7ffb3569a67b6e2488eb47f360a",
+  "frozen_b0_manifest": "experiments/stage2_b0_ddp2/results/freeze_manifest.json"
+}
