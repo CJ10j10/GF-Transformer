@@ -1,0 +1,65 @@
+{
+  "F1s_unrounded": 0.7596456050751301,
+  "absolute_delta_vs_baseline_b": {
+    "F1_0": 0.0019,
+    "F1_1": 0.0359,
+    "F1_2": -0.0045,
+    "F1_3": 0.002,
+    "F1b": 0.0,
+    "F1d": 0.0166,
+    "F1s": 0.0116
+  },
+  "absolute_delta_vs_k2_ddp2": {
+    "F1_0": -0.0008,
+    "F1_1": 0.0252,
+    "F1_2": 0.013,
+    "F1_3": -0.0064,
+    "F1b": 0.0,
+    "F1d": 0.0139,
+    "F1s": 0.0097
+  },
+  "baseline_checkpoint": "experiments/stage2_fixdata/ckpt_repo_bs4/GFformer_cls_3_fixdata_best14",
+  "baseline_metrics": {
+    "F1_0": 0.9379,
+    "F1_1": 0.4917,
+    "F1_2": 0.7015,
+    "F1_3": 0.8122,
+    "F1b": 0.872,
+    "F1d": 0.6949,
+    "F1s": 0.748
+  },
+  "checkpoint": "experiments/stage2_b0_ddp2/ckpt/GFformer_cls_3_b0_ddp2_best14",
+  "checkpoint_best_score": 0.7596451838892917,
+  "checkpoint_epoch": 13,
+  "checkpoint_sha256": "3c10b6f1ea807ee77dddc11743bbf73e471ab6ad8a2473fc424116721f8a1193",
+  "eval_git_head": "8016788d30ccd8894c971ebd3ee053dea4b9f319",
+  "k2_checkpoint": "experiments/stage2_k2_kalman_refine/ckpt_ddp2/GFformer_cls_3_k2_ddp2_best14",
+  "k2_metrics": {
+    "F1_0": 0.9406,
+    "F1_1": 0.5024,
+    "F1_2": 0.684,
+    "F1_3": 0.8206,
+    "F1b": 0.872,
+    "F1d": 0.6976,
+    "F1s": 0.7499
+  },
+  "localization_masks": "experiments/stage1_fixdata_eval/loc_masks",
+  "metric_code": "train_segformer_cls.validate",
+  "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "metrics": {
+    "F1_0": 0.9398,
+    "F1_1": 0.5276,
+    "F1_2": 0.697,
+    "F1_3": 0.8142,
+    "F1b": 0.872,
+    "F1d": 0.7115,
+    "F1s": 0.7596
+  },
+  "mode": "single",
+  "validation_images": 917,
+  "validation_split_seed": 3,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
+  "views": [
+    "original"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "b0_checkpoint_sha256": "3c10b6f1ea807ee77dddc11743bbf73e471ab6ad8a2473fc424116721f8a1193",
+  "damage_classes": [
+    "no_damage",
+    "minor_damage",
+    "major_damage",
+    "destroyed"
+  ],
+  "k2_checkpoint_sha256": "8238addd6d0845515e6a893c5ae73c0bed93f7ffb3569a67b6e2488eb47f360a",
+  "method": "paired image resampling with replacement; sum TP/FP/FN then compute global F1b, harmonic F1d, and F1s",
+  "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "resamples": 10000,
+  "results": {
+    "F1_0": {
+      "bootstrap_percentile_95_ci": [
+        -0.004462038050341943,
+        0.0029553378907573864
+      ],
+      "bootstrap_standard_error": 0.0018667913171416665,
+      "fraction_delta_positive": 0.3495,
+      "observed_delta_b0_minus_k2": -0.0007148183776913841
+    },
+    "F1_1": {
+      "bootstrap_percentile_95_ci": [
+        -0.005678352592231318,
+        0.062007876345849956
+      ],
+      "bootstrap_standard_error": 0.01712718521942566,
+      "fraction_delta_positive": 0.9386,
+      "observed_delta_b0_minus_k2": 0.02519281306085397
+    },
+    "F1_2": {
+      "bootstrap_percentile_95_ci": [
+        -0.01362851462521236,
+        0.052137746302722485
+      ],
+      "bootstrap_standard_error": 0.016712533802564298,
+      "fraction_delta_positive": 0.8019,
+      "observed_delta_b0_minus_k2": 0.013001348219039865
+    },
+    "F1_3": {
+      "bootstrap_percentile_95_ci": [
+        -0.015685355753803025,
+        0.0012308767334678365
+      ],
+      "bootstrap_standard_error": 0.004216590273331361,
+      "fraction_delta_positive": 0.0464,
+      "observed_delta_b0_minus_k2": -0.00642001206964915
+    },
+    "F1b": {
+      "bootstrap_percentile_95_ci": [
+        0.0,
+        0.0
+      ],
+      "bootstrap_standard_error": 0.0,
+      "fraction_delta_positive": 0.0,
+      "observed_delta_b0_minus_k2": 0.0
+    },
+    "F1d": {
+      "bootstrap_percentile_95_ci": [
+        -0.004376176475986539,
+        0.03698256323305593
+      ],
+      "bootstrap_standard_error": 0.010467112983070093,
+      "fraction_delta_positive": 0.9267,
+      "observed_delta_b0_minus_k2": 0.013882674896183889
+    },
+    "F1s": {
+      "bootstrap_percentile_95_ci": [
+        -0.0030633235331905973,
+        0.025887794263139113
+      ],
+      "bootstrap_standard_error": 0.007326979088149066,
+      "fraction_delta_positive": 0.9267,
+      "observed_delta_b0_minus_k2": 0.0097178724273288
+    }
+  },
+  "scope": "image sampling uncertainty on this fixed validation set and selected checkpoints; does not include training-seed or checkpoint-selection uncertainty",
+  "seed": 20260928,
+  "validation_images": 917,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e"
+}
