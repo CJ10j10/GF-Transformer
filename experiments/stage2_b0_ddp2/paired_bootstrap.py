@@ -128,12 +128,26 @@ def main():
             'bootstrap_standard_error': float(np.std(values, ddof=1)),
             'fraction_delta_positive': float(np.mean(values > 0)),
         }
+    mask_manifest = hashlib.sha256()
+    for image in val_files:
+        mask = Path(T.LOC_FOLDER) / (Path(image).stem + '_part1.png')
+        if not mask.is_file():
+            raise FileNotFoundError(mask)
+        mask_manifest.update(str(mask.relative_to(ROOT)).encode() + b'\0')
+        mask_manifest.update(sha256_file(mask).encode() + b'\n')
     result = {
         'method': 'paired image resampling with replacement; sum TP/FP/FN then compute global F1b, harmonic F1d, and F1s',
+        'delta_definition': 'B0-D2 minus K2-D2',
         'resamples': N_BOOTSTRAP,
+        'n_boot': N_BOOTSTRAP,
         'seed': SEED,
+        'bootstrap_rng_seed': SEED,
         'validation_images': len(val_files),
+        'image_count': len(val_files),
         'validation_split_sha256': split_sha,
+        'image_ids_sha256': split_sha,
+        'localization_masks': b0_result['localization_masks'],
+        'validation_mask_manifest_sha256': mask_manifest.hexdigest(),
         'metric_code_sha256': b0_result['metric_code_sha256'],
         'b0_checkpoint_sha256': b0_result['checkpoint_sha256'],
         'k2_checkpoint_sha256': k2_result['checkpoint_sha256'],

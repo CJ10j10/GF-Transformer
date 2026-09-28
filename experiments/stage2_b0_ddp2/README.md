@@ -1,6 +1,6 @@
 # B0-D2 matched control: training handoff
 
-Status: completed. The formal 50-epoch B0-D2 job finished successfully in 14.60 hours on 2026-09-26 UTC. The best checkpoint is epoch 13; its fixed 917-image single-view validation was independently reproduced on 2026-09-28.
+Status: FROZEN. The formal 50-epoch B0-D2 job finished successfully in 14.60 hours on 2026-09-26 UTC. The best checkpoint is epoch 13; its fixed 917-image single-view validation was independently reproduced on 2026-09-28. `results/freeze_manifest.json` records the complete checkpoint, image ID, localization-mask and metric-code provenance.
 
 ## Comparison and protocol
 

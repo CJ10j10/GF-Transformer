@@ -1,14 +1,20 @@
 {
   "b0_checkpoint_sha256": "3c10b6f1ea807ee77dddc11743bbf73e471ab6ad8a2473fc424116721f8a1193",
+  "bootstrap_rng_seed": 20260928,
   "damage_classes": [
     "no_damage",
     "minor_damage",
     "major_damage",
     "destroyed"
   ],
+  "delta_definition": "B0-D2 minus K2-D2",
+  "image_count": 917,
+  "image_ids_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
   "k2_checkpoint_sha256": "8238addd6d0845515e6a893c5ae73c0bed93f7ffb3569a67b6e2488eb47f360a",
+  "localization_masks": "experiments/stage1_fixdata_eval/loc_masks",
   "method": "paired image resampling with replacement; sum TP/FP/FN then compute global F1b, harmonic F1d, and F1s",
   "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "n_boot": 10000,
   "resamples": 10000,
   "results": {
     "F1_0": {
@@ -78,5 +84,6 @@
   "scope": "image sampling uncertainty on this fixed validation set and selected checkpoints; does not include training-seed or checkpoint-selection uncertainty",
   "seed": 20260928,
   "validation_images": 917,
+  "validation_mask_manifest_sha256": "37e841011b556f48e6158f6feb5df9efccbe854bdc0843c5be49e69d6e3b6f55",
   "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e"
 }
