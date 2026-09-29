@@ -1,0 +1,30 @@
+{
+  "F1s_unrounded": 0.7560386041032012,
+  "checkpoint": "experiments/stage2_matched_seeds/runs/b0_seed11/ckpt/GFformer_cls_3_b0_ddp2_seed11_best14",
+  "checkpoint_best_score": 0.7560386834493686,
+  "checkpoint_epoch_1based": 19,
+  "checkpoint_sha256": "5a6ae589d8367b33dceef608abd4a014356d366f6d578882f64a3a1e0b78f7f9",
+  "eval_git_head": "6eddc6c2d013145a0a7eaa168b2e09ace06966e6",
+  "localization_masks": "experiments/stage1_fixdata_eval/loc_masks",
+  "metric_code": "train_segformer_cls.validate",
+  "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "metrics": {
+    "F1_0": 0.9405,
+    "F1_1": 0.5166,
+    "F1_2": 0.6933,
+    "F1_3": 0.8185,
+    "F1b": 0.872,
+    "F1d": 0.7063,
+    "F1s": 0.756
+  },
+  "mode": "single",
+  "train_seed": 11,
+  "validation_images": 917,
+  "validation_mask_manifest_sha256": "37e841011b556f48e6158f6feb5df9efccbe854bdc0843c5be49e69d6e3b6f55",
+  "validation_split_seed": 3,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
+  "variant": "b0",
+  "views": [
+    "original"
+  ]
+}
