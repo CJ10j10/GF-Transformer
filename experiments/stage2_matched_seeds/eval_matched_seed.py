@@ -35,7 +35,10 @@ def main():
     split_sha = M.audit_fixed_validation(val_idxs, freeze)
     checkpoint = torch.load(str(ckpt_path), map_location='cpu')
     checkpoint_sha = sha256_file(ckpt_path)
-    model = T.GFformer_two(use_kalman=args.variant == 'k2').cuda().eval()
+    model = T.GFformer_two(
+        use_kalman=args.variant in ('k2', 'k2b'),
+        kalman_mode='post_gf' if args.variant == 'k2b' else 'change'
+    ).cuda().eval()
     model.load_state_dict(checkpoint['state_dict'], strict=True)
     loader = DataLoader(T.ValData(val_idxs), batch_size=1, shuffle=False,
                         num_workers=4, pin_memory=True)

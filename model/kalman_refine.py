@@ -31,3 +31,31 @@ class KalmanRefine(nn.Module):
                 'std': values.std(unbiased=False).item(),
             }
         return global_feat + self.gamma * k * z
+
+
+class KalmanPostGFRefine(nn.Module):
+    """Treat the GF output as prior and projected post feature as observation."""
+
+    def __init__(self, post_channels: int, global_channels: int):
+        super().__init__()
+        self.obs_proj = nn.Conv2d(post_channels, global_channels, 1)
+        self.p_net = nn.Conv2d(global_channels, global_channels, 1)
+        self.r_net = nn.Conv2d(global_channels, global_channels, 1)
+        self.record_k_stats = False
+        self.last_k_stats = None
+
+    def forward(self, post_feat, global_feat):
+        observation = self.obs_proj(post_feat)
+        innovation = observation - global_feat
+        p = F.softplus(self.p_net(global_feat)) + 1e-6
+        r = F.softplus(self.r_net(innovation.abs())) + 1e-6
+        k = p / (p + r)
+        if self.record_k_stats:
+            values = k.detach().float()
+            self.last_k_stats = {
+                'min': values.min().item(),
+                'max': values.max().item(),
+                'mean': values.mean().item(),
+                'std': values.std(unbiased=False).item(),
+            }
+        return global_feat + k * innovation

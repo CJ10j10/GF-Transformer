@@ -4,7 +4,7 @@ from torch.nn import Conv2d, Parameter, Softmax
 import torch
 import torch.nn.functional as F
 import numpy as np
-from kalman_refine import KalmanRefine
+from kalman_refine import KalmanRefine, KalmanPostGFRefine
 class ConvRelu(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3):
         super(ConvRelu, self).__init__()
@@ -303,7 +303,7 @@ class GF_module1(nn.Module):
 
         return self.conv_out(fus_pre + fus_post + cu_g)
 class GFformer_two(nn.Module):
-    def __init__(self, use_kalman=False):
+    def __init__(self, use_kalman=False, kalman_mode="change"):
         super(GFformer_two, self).__init__()
         model = Encoder()
         self.gfm1 = GF_module(64, 128)    
@@ -320,11 +320,15 @@ class GFformer_two(nn.Module):
         self.decoder = Decoder_double()
         decoder_filters = np.asarray([20, 128, 256, 512]) // 2
         self.res = nn.Conv2d(decoder_filters[-4], 5, 1, stride=1, padding=0)
+        if kalman_mode not in ("change", "post_gf"):
+            raise ValueError(f"Unknown Kalman mode: {kalman_mode}")
         self.use_kalman = use_kalman
+        self.kalman_mode = kalman_mode
         if use_kalman:
-            self.kalman1 = KalmanRefine(64, 128)
-            self.kalman2 = KalmanRefine(128, 320)
-            self.kalman3 = KalmanRefine(320, 512)
+            refine = KalmanRefine if kalman_mode == "change" else KalmanPostGFRefine
+            self.kalman1 = refine(64, 128)
+            self.kalman2 = refine(128, 320)
+            self.kalman3 = refine(320, 512)
     def forward(self, rgb):
         pre_image = rgb[:, :3, :, :]
         post_image = rgb[:, 3:, :, :]
@@ -361,7 +365,10 @@ class GFformer_two(nn.Module):
         """
         global_1 = self.gfm1(r1, r1_1)
         if self.use_kalman:
-            global_1 = self.kalman1(r1, r1_1, global_1)
+            if self.kalman_mode == "post_gf":
+                global_1 = self.kalman1(r1_1, global_1)
+            else:
+                global_1 = self.kalman1(r1, r1_1, global_1)
 
         # print("stage1 shape", r1.shape, r1_1.shape, global_1.shape)
         r1, r1_1 = self.CSGF1(r1, r1_1, global_1)
@@ -383,7 +390,10 @@ class GFformer_two(nn.Module):
 
         global_2 = self.gfm2(r2, r2_1, global_1)
         if self.use_kalman:
-            global_2 = self.kalman2(r2, r2_1, global_2)
+            if self.kalman_mode == "post_gf":
+                global_2 = self.kalman2(r2_1, global_2)
+            else:
+                global_2 = self.kalman2(r2, r2_1, global_2)
         r2_fusion, r2_1_fusion = self.CSGF2(r2, r2_1, global_2)
 
         # stage3
@@ -401,7 +411,10 @@ class GFformer_two(nn.Module):
 
         global_3 = self.gfm3(r3, r3_1, global_2)
         if self.use_kalman:
-            global_3 = self.kalman3(r3, r3_1, global_3)
+            if self.kalman_mode == "post_gf":
+                global_3 = self.kalman3(r3_1, global_3)
+            else:
+                global_3 = self.kalman3(r3, r3_1, global_3)
         r3_fusion, r3_1_fusion = self.CSGF3(r3, r3_1, global_3)
 
         # stage4

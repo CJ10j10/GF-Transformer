@@ -53,3 +53,8 @@ experiments/stage2_b0_ddp2/current_log.txt
 !experiments/stage2_matched_seeds/runs/
 experiments/stage2_matched_seeds/runs/*/ckpt/
 experiments/stage2_matched_seeds/runs/*/current_log.txt
+
+# K2b post-GF observation experiment outputs
+!experiments/stage2_k2b_post_gf/runs/
+experiments/stage2_k2b_post_gf/runs/*/ckpt/
+experiments/stage2_k2b_post_gf/runs/*/current_log.txt

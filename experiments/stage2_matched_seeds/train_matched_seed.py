@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen-protocol 2x2 B0/K2 seed screening; launch only through run_matched_seed.sh."""
+"""Frozen-protocol 2x2 seed training; launch only after matching preflight."""
 
 import argparse
 import csv
@@ -31,12 +31,14 @@ HISTORY_FIELDS = P.HISTORY_FIELDS
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--variant', choices=('b0', 'k2'), required=True)
-    parser.add_argument('--seed', type=int, choices=(11, 23), required=True)
+    parser.add_argument('--variant', choices=('b0', 'k2', 'k2b'), required=True)
+    parser.add_argument('--seed', type=int, choices=(3, 11, 23), required=True)
     return parser.parse_args()
 
 
 def run_dir(variant, seed):
+    if variant == 'k2b':
+        return ROOT / 'experiments' / 'stage2_k2b_post_gf' / 'runs' / f'seed{seed}'
     return EXP / 'runs' / f'{variant}_seed{seed}'
 
 
@@ -46,8 +48,12 @@ def check_plan(args):
     freeze = json.loads(FROZEN.read_text())
     assert freeze['status'] == 'FROZEN'
     assert plan['train_seeds_for_all_variants'] == [3, 11, 23]
-    assert args.seed in plan['new_matched_seed_screening']
-    assert args.variant in plan['variants_in_screening']
+    if args.variant == 'k2b':
+        assert args.variant in plan['future_variants_using_same_seed_set']
+        assert args.seed in plan['train_seeds_for_all_variants']
+    else:
+        assert args.seed in plan['new_matched_seed_screening']
+        assert args.variant in plan['variants_in_screening']
     assert plan['validation_split_seed'] == 3
     assert plan['validation_split_sha256'] == freeze['image_ids_sha256']
     assert sha256_file(ROOT / 'train_segformer_cls.py') == freeze['metric_code_sha256']
@@ -117,7 +123,10 @@ def main():
         split_sha = audit_fixed_validation(val_idxs, freeze)
         train_loader, sampler = make_train_loader(train_idxs, rank, args.seed)
         val_loader = P.make_val_loader(val_idxs) if rank == 0 else None
-        model = T.GFformer_two(use_kalman=args.variant == 'k2').cuda(local_rank)
+        model = T.GFformer_two(
+            use_kalman=args.variant in ('k2', 'k2b'),
+            kalman_mode='post_gf' if args.variant == 'k2b' else 'change'
+        ).cuda(local_rank)
         transfer = T.transfer_stage1_weights(model, T.STAGE1_LOC_CKPT,
                                               verbose=T.is_main())
         assert transfer['coverage_backbone'] == 1.0

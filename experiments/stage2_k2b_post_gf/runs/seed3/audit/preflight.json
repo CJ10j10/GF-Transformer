@@ -1,0 +1,240 @@
+{
+  "ready_for_training": true,
+  "variant": "k2b",
+  "train_seed": 3,
+  "validation_split_seed": 3,
+  "validation_split_sha256": "7e3c7e8cf1762512697055f6a7bfd5d51050a6d03fc4d93e0d86e1ffaa2c480e",
+  "validation_mask_manifest_sha256": "37e841011b556f48e6158f6feb5df9efccbe854bdc0843c5be49e69d6e3b6f55",
+  "metric_code_sha256": "906d6f68e9a7919c4a97944cace628678160888ffa53c835a587d84ecfba92d9",
+  "validation_images": 917,
+  "validation_sample_score": 0.2695811915383021,
+  "world_size": 2,
+  "per_gpu_batch": 2,
+  "grad_accum": 1,
+  "global_batch": 4,
+  "updates_per_full_epoch": 3351,
+  "formal_epochs": 50,
+  "lr": 0.0002,
+  "weight_decay": 1e-06,
+  "scheduler_milestones": [
+    3,
+    9
+  ],
+  "scheduler_gamma": 0.5,
+  "crop": [
+    512,
+    512
+  ],
+  "amp": false,
+  "stage1_checkpoint": "/workspace/GF-Transformer/experiments/stage1_fixdata_eval/ckpt/GFformer_loc_fixdata_ep57_valdice0.8830_sha_cd940989.pt",
+  "checkpoint_dir": "/workspace/GF-Transformer/experiments/stage2_k2b_post_gf/runs/seed3/ckpt",
+  "ranks": [
+    {
+      "rank": 0,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "initial_logits_max_abs_diff_from_b0": 1.64739990234375,
+      "kalman_gain": {
+        "K1": {
+          "min": 0.06506510078907013,
+          "max": 0.9637659192085266,
+          "mean": 0.5086461305618286,
+          "std": 0.08157577365636826
+        },
+        "K2": {
+          "min": 0.1649891585111618,
+          "max": 0.8955621123313904,
+          "mean": 0.4921041429042816,
+          "std": 0.09860927611589432
+        },
+        "K3": {
+          "min": 0.16612115502357483,
+          "max": 0.8506447672843933,
+          "mean": 0.5045390129089355,
+          "std": 0.08086590468883514
+        }
+      },
+      "parameter_counts": {
+        "b0": 56517168,
+        "k2b": 57494896
+      },
+      "updates": 20,
+      "loss": 2.376422058045864,
+      "cross_entropy": 0.13408967887794213,
+      "elapsed_seconds": 10.046676309022587,
+      "median_steady_step_seconds": 0.36788939899997786,
+      "peak_allocated_gib": 11.181097507476807,
+      "peak_reserved_gib": 16.8125,
+      "first_three_step_gradients": [
+        {
+          "step": 1,
+          "branches": {
+            "K1": {
+              "obs": 1.1825534784293268e-05,
+              "P": 5.596639766736189e-06,
+              "R": 5.4323713811754715e-06
+            },
+            "K2": {
+              "obs": 7.2907268986455165e-06,
+              "P": 7.865649422456045e-06,
+              "R": 8.654509656480514e-06
+            },
+            "K3": {
+              "obs": 2.6267886710229504e-07,
+              "P": 1.9523395167198032e-07,
+              "R": 1.6410891134910344e-07
+            }
+          }
+        },
+        {
+          "step": 2,
+          "branches": {
+            "K1": {
+              "obs": 5.564670118474169e-06,
+              "P": 2.4514124561392237e-06,
+              "R": 2.5118235953414114e-06
+            },
+            "K2": {
+              "obs": 4.152207111474127e-06,
+              "P": 9.689520993561018e-06,
+              "R": 9.942976248566993e-06
+            },
+            "K3": {
+              "obs": 1.6994444962392663e-08,
+              "P": 1.8999442019662638e-08,
+              "R": 2.0664497668576587e-08
+            }
+          }
+        },
+        {
+          "step": 3,
+          "branches": {
+            "K1": {
+              "obs": 4.610595624399139e-06,
+              "P": 3.1462313927477226e-06,
+              "R": 2.7667078938975465e-06
+            },
+            "K2": {
+              "obs": 2.8715414828184294e-06,
+              "P": 3.903959168383153e-06,
+              "R": 4.3029235712310765e-06
+            },
+            "K3": {
+              "obs": 2.075970087389578e-06,
+              "P": 2.610498540889239e-06,
+              "R": 2.9728078061452834e-06
+            }
+          }
+        }
+      ],
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0
+    },
+    {
+      "rank": 1,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "initial_logits_max_abs_diff_from_b0": 2.3922080993652344,
+      "kalman_gain": {
+        "K1": {
+          "min": 0.0787505954504013,
+          "max": 0.9429139494895935,
+          "mean": 0.5074765086174011,
+          "std": 0.0826038345694542
+        },
+        "K2": {
+          "min": 0.1840549260377884,
+          "max": 0.8502703905105591,
+          "mean": 0.49210381507873535,
+          "std": 0.09309845417737961
+        },
+        "K3": {
+          "min": 0.1881035715341568,
+          "max": 0.8440737128257751,
+          "mean": 0.503592848777771,
+          "std": 0.08129513263702393
+        }
+      },
+      "parameter_counts": {
+        "b0": 56517168,
+        "k2b": 57494896
+      },
+      "updates": 20,
+      "loss": 2.7861437410116197,
+      "cross_entropy": 0.17008518168504666,
+      "elapsed_seconds": 10.021865595015697,
+      "median_steady_step_seconds": 0.3689477790030651,
+      "peak_allocated_gib": 11.181097507476807,
+      "peak_reserved_gib": 16.810546875,
+      "first_three_step_gradients": [
+        {
+          "step": 1,
+          "branches": {
+            "K1": {
+              "obs": 1.1825534784293268e-05,
+              "P": 5.596639766736189e-06,
+              "R": 5.4323713811754715e-06
+            },
+            "K2": {
+              "obs": 7.2907268986455165e-06,
+              "P": 7.865649422456045e-06,
+              "R": 8.654509656480514e-06
+            },
+            "K3": {
+              "obs": 2.6267886710229504e-07,
+              "P": 1.9523395167198032e-07,
+              "R": 1.6410891134910344e-07
+            }
+          }
+        },
+        {
+          "step": 2,
+          "branches": {
+            "K1": {
+              "obs": 5.564670118474169e-06,
+              "P": 2.4514124561392237e-06,
+              "R": 2.5118235953414114e-06
+            },
+            "K2": {
+              "obs": 4.152207111474127e-06,
+              "P": 9.689520993561018e-06,
+              "R": 9.942976248566993e-06
+            },
+            "K3": {
+              "obs": 1.6994444962392663e-08,
+              "P": 1.8999442019662638e-08,
+              "R": 2.0664497668576587e-08
+            }
+          }
+        },
+        {
+          "step": 3,
+          "branches": {
+            "K1": {
+              "obs": 4.610595624399139e-06,
+              "P": 3.1462313927477226e-06,
+              "R": 2.7667078938975465e-06
+            },
+            "K2": {
+              "obs": 2.8715414828184294e-06,
+              "P": 3.903959168383153e-06,
+              "R": 4.3029235712310765e-06
+            },
+            "K3": {
+              "obs": 2.075970087389578e-06,
+              "P": 2.610498540889239e-06,
+              "R": 2.9728078061452834e-06
+            }
+          }
+        }
+      ],
+      "backbone_trainable_tensors": 572,
+      "stage1_encoder_coverage": 1.0
+    }
+  ],
+  "code_sha256": {
+    "model/gfmodel.py": "b1547c7078ddf73b1f992f93110b46dd9bafb70fbce85198be58cec1bb9c395e",
+    "model/kalman_refine.py": "20ac22cbc4ce99a81de6dc1e87d31a3eb9e029e04a7a5e19e5c1f6748d6852f8",
+    "experiments/stage2_matched_seeds/train_matched_seed.py": "2cb8b806c8d8aeecf044e326627b2187bc9b0878633a3f7d4fc2d08c35ad2b64"
+  },
+  "baseline_reference_checkpoint": "experiments/stage2_b0_ddp2/ckpt/GFformer_cls_3_b0_ddp2_best14",
+  "baseline_reference_checkpoint_sha256": "3c10b6f1ea807ee77dddc11743bbf73e471ab6ad8a2473fc424116721f8a1193"
+}
